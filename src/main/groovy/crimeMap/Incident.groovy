@@ -1,5 +1,0 @@
-package crimeMap
-
-class Incident {
-
-}

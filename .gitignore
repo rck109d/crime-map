@@ -1,0 +1,8 @@
+/build
+/gradle
+/.gradle
+/.idea
+/settings.gradle
+/crime-map.iml
+/gradlew
+/gradlew.bat
