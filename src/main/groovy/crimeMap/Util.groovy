@@ -1,5 +1,6 @@
 package crimeMap
 
+import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
 
 class Util {
@@ -9,5 +10,9 @@ class Util {
 
   static String dashyYMD2slashyMDY(String dashyYMD) {
     "${dashyYMD[5..6]}/${dashyYMD[8..9]}/${dashyYMD[0..3]}"
+  }
+
+  static void pprintln(x) {
+    println JsonOutput.prettyPrint(JsonOutput.toJson(x))
   }
 }
