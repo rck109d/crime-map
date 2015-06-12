@@ -1,6 +1,7 @@
 package crimeMap
 
 import groovy.json.JsonOutput
+import groovy.transform.CompileStatic
 import org.apache.http.HttpEntity
 import org.apache.http.HttpResponse
 import org.apache.http.client.HttpClient
@@ -15,87 +16,90 @@ import org.apache.http.message.BasicHeader
 import org.apache.http.protocol.HTTP
 import org.apache.http.util.EntityUtils
 
+import java.time.LocalDate
+
+@CompileStatic
 class ApdAdapter {
-  private static final String crimeDataUri = 'http://65.82.136.65:80/Service.aspx/GetMapData'
-  private static final HttpClient httpClient = createHttpClient()
+    private static final String crimeDataUri = 'http://65.82.136.65:80/Service.aspx/GetMapData'
+    private static final HttpClient httpClient = createHttpClient()
 
-  private static HttpClient createHttpClient() {
-    RegistryBuilder registryBuilder = RegistryBuilder.<ConnectionSocketFactory> create()
-    registryBuilder.register('http', new TorSocketFactory())
-    Registry<ConnectionSocketFactory> socketFactoryRegistry = registryBuilder.build()
-    PoolingHttpClientConnectionManager connectionManager = new PoolingHttpClientConnectionManager(socketFactoryRegistry)
-    HttpClient httpClient = HttpClients.custom().setConnectionManager(connectionManager).build()
-    return httpClient
-  }
-
-  /**
-   *
-   * @param ymd yyyy-MM-dd
-   * @return incidents for all zones on date
-   */
-  static List getIncidentsForDate(String ymd) {
-    (1..6).collectMany { int zone ->
-      getIncidentsForZoneAndDate(zone, ymd)
+    private static HttpClient createHttpClient() {
+        RegistryBuilder registryBuilder = RegistryBuilder.<ConnectionSocketFactory> create()
+        registryBuilder.register('http', new TorSocketFactory())
+        Registry<ConnectionSocketFactory> socketFactoryRegistry = registryBuilder.build()
+        PoolingHttpClientConnectionManager connectionManager = new PoolingHttpClientConnectionManager(socketFactoryRegistry)
+        HttpClient httpClient = HttpClients.custom().setConnectionManager(connectionManager).build()
+        return httpClient
     }
-  }
 
-  /**
-   *
-   * @param zone 1-6
-   * @param ymd yyyy-MM-dd
-   * @return incidents for zone on date
-   */
-  private static List getIncidentsForZoneAndDate(int zone, String ymd) {
-    String zoneId = (String) zone
-    String offenseCodes = (1..8).join(',')
-    String startDate = ymd
-    String endDate = ymd
-    String response = fetchCrimeData(zoneId, offenseCodes, startDate, endDate)
-    Map responseMap = Util.parseJson(response)
-    // double-decode insanity
-    responseMap = Util.parseJson((String) responseMap.d)
-    int recordCount = Integer.parseInt((String) responseMap.recordCount, 10)
-    List incidents = responseMap.incidents
-    assert incidents.size() == recordCount
-    return incidents
-  }
+    /**
+     *
+     * @param ymdDashed yyyy-MM-dd
+     * @return incidents for all zones on date
+     */
+    static List<Incident> getIncidentsForDate(LocalDate date) {
+        (1..6).collectMany { int zone ->
+            getIncidentsForZoneAndDate(zone, date)
+        }
+    }
 
-  /**
-   *
-   * @param zoneId 1-6
-   * @param offenseCodes 1,2,3,4,5,6,7,8
-   * @param start yyyy-MM-dd
-   * @param end yyyy-MM-dd
-   * @return response as string
-   */
-  private static String fetchCrimeData(String zoneID, String offenseCodes, String start, String end) {
-    // APD server wants MM/dd/yyyy
-    String startMDY = Util.dashyYMD2slashyMDY(start)
-    String endMDY = Util.dashyYMD2slashyMDY(end)
-    String json = JsonOutput.toJson([
-        zoneID      : zoneID,
-        offenseCodes: offenseCodes,
-        startDate   : startMDY,
-        endDate     : endMDY
-    ])
-    final StringEntity se = new StringEntity(json)
-    se.setContentType(new BasicHeader(HTTP.CONTENT_TYPE, 'application/json'))
-    String responseString = post(crimeDataUri, se)
-    return responseString
-  }
+    /**
+     *
+     * @param zone 1-6
+     * @param ymdDashed yyyy-MM-dd
+     * @return incidents for zone on date
+     */
+    private static List<Incident> getIncidentsForZoneAndDate(int zone, LocalDate date) {
+        String zoneId = "$zone"
+        String offenseCodes = (1..8).join(',')
+        String response = fetchCrimeData(zoneId, offenseCodes, date, date)
+        Map responseMap = (Map) Util.parseJson(response)
+        // double-decode insanity
+        responseMap = (Map) Util.parseJson((String) responseMap.d)
+        int recordCount = Integer.parseInt((String) responseMap.recordCount, 10)
+        List<Incident> incidents = responseMap.incidents.collect { Map it ->
+            Incident.fromAPD(it)
+        }
+        assert incidents.size() == recordCount
+        return incidents
+    }
 
-  /**
-   *
-   * @param uri remote address
-   * @param entity post body
-   * @return response as string
-   */
-  private static String post(String uri, HttpEntity entity) {
-    final HttpPost httpPost = new HttpPost(uri)
-    httpPost.setEntity(entity)
-    final HttpResponse response = httpClient.execute(httpPost)
-    final HttpEntity responseEntity = response.getEntity()
-    final String responseString = EntityUtils.toString(responseEntity)
-    return responseString
-  }
+    /**
+     *
+     * @param zoneId 1-6
+     * @param offenseCodes 1,2,3,4,5,6,7,8
+     * @param start yyyy-MM-dd
+     * @param end yyyy-MM-dd
+     * @return response as string
+     */
+    private static String fetchCrimeData(String zoneID, String offenseCodes, LocalDate start, LocalDate end) {
+        // APD server wants MM/dd/yyyy
+        String startMDY = Util.localDate2slashyMDY(start)
+        String endMDY = Util.localDate2slashyMDY(end)
+        String json = JsonOutput.toJson([
+                zoneID      : zoneID,
+                offenseCodes: offenseCodes,
+                startDate   : startMDY,
+                endDate     : endMDY
+        ])
+        final StringEntity se = new StringEntity(json)
+        se.setContentType(new BasicHeader(HTTP.CONTENT_TYPE, 'application/json'))
+        String responseString = post(crimeDataUri, se)
+        return responseString
+    }
+
+    /**
+     *
+     * @param uri remote address
+     * @param entity post body
+     * @return response as string
+     */
+    private static String post(String uri, HttpEntity entity) {
+        final HttpPost httpPost = new HttpPost(uri)
+        httpPost.setEntity(entity)
+        final HttpResponse response = httpClient.execute(httpPost)
+        final HttpEntity responseEntity = response.getEntity()
+        final String responseString = EntityUtils.toString(responseEntity)
+        return responseString
+    }
 }
