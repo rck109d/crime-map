@@ -1,10 +1,12 @@
 package crimeMap
 
+import groovy.transform.CompileStatic
 import org.apache.http.HttpHost
 import org.apache.http.conn.ConnectTimeoutException
 import org.apache.http.conn.socket.ConnectionSocketFactory
 import org.apache.http.protocol.HttpContext
 
+@CompileStatic
 public class TorSocketFactory implements ConnectionSocketFactory {
   @Override
   public Socket createSocket(HttpContext context) throws IOException {
