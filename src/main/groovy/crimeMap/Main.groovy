@@ -8,7 +8,7 @@ import java.time.LocalDate
 class Main {
   static void main(String[] args) {
     initProxy()
-    Util.pprintln ApdAdapter.getIncidentsForDate(LocalDate.parse('2015-05-02'))
+    IncidentLoader.updateThroughYesterday()
   }
 
   static void initProxy() {

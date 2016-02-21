@@ -12,9 +12,9 @@ repositories {
 }
 
 dependencies {
-    compile 'org.codehaus.groovy:groovy-all:2.4.3'
-    compile 'io.vertx:vertx-core:3.0.0-milestone5'
+    compile 'org.codehaus.groovy:groovy-all:2.4.5'
+    compile 'io.vertx:vertx-core:3.2.1'
     compile 'com.gmongo:gmongo:1.5'
-    compile 'org.apache.httpcomponents:httpclient:4.4.1'
-    testCompile 'junit:junit:4.11'
+    compile 'org.apache.httpcomponents:httpclient:4.5.1'
+    testCompile 'junit:junit:4.12'
 }
