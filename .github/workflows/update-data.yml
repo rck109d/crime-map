@@ -1,0 +1,83 @@
+name: Update incident data
+
+on:
+  schedule:
+    # Daily at 09:17 UTC (4-5am in Atlanta). Off the hour, when GitHub's
+    # scheduler is less congested.
+    - cron: "17 9 * * *"
+  workflow_dispatch:
+    inputs:
+      start:
+        description: "First report date, YYYY-MM-DD (blank = 'days' back from end)"
+        required: false
+      end:
+        description: "Last report date, YYYY-MM-DD (blank = today)"
+        required: false
+      days:
+        description: "Days to refresh when start is blank"
+        required: false
+        default: "90"
+      full:
+        description: "Re-fetch the ENTIRE layer and replace the archive (ignores dates)"
+        type: boolean
+        default: false
+      force:
+        description: "Write even if the source returned far fewer records than archived"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-data
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Fetch from APD open data
+        working-directory: backend
+        env:
+          # Inputs go through env (not ${{ }} in the script) and are validated
+          # by the CLI, so free text cannot inject shell commands.
+          IN_START: ${{ inputs.start }}
+          IN_END: ${{ inputs.end }}
+          IN_DAYS: ${{ inputs.days }}
+          IN_FULL: ${{ inputs.full }}
+          IN_FORCE: ${{ inputs.force }}
+        run: |
+          args=(load --summary-file "$RUNNER_TEMP/summary.txt")
+          if [ "$IN_FULL" = "true" ]; then
+            args+=(--all)
+          else
+            [ -n "$IN_START" ] && args+=(--start "$IN_START")
+            [ -n "$IN_END" ] && args+=(--end "$IN_END")
+            [ -n "$IN_DAYS" ] && args+=(--days "$IN_DAYS")
+          fi
+          [ "$IN_FORCE" = "true" ] && args+=(--force)
+          uv run --frozen crimemap "${args[@]}"
+
+      - name: Commit changes
+        run: |
+          git add data
+          if git diff --cached --quiet; then
+            echo "No data changes."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -q -F "$RUNNER_TEMP/summary.txt"
+          for attempt in 1 2 3 4; do
+            git push && exit 0
+            echo "Push rejected; rebasing onto the latest branch (attempt $attempt)"
+            sleep $((attempt * 5))
+            git pull --rebase
+          done
+          exit 1

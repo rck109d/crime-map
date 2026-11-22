@@ -1,8 +1,16 @@
-/build
-/gradle
-/.gradle
-/.idea
-/settings.gradle
-/crime-map.iml
-/gradlew
-/gradlew.bat
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Local query caches built from data/ (the CSVs are the source of truth)
+*.duckdb
+*.duckdb.wal
+*.parquet
+
+# Editors
+.idea/
+.vscode/

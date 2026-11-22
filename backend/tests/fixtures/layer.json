@@ -1,0 +1,343 @@
+{
+ "fields": [
+  {
+   "name": "OBJECTID",
+   "type": "esriFieldTypeOID",
+   "alias": "OBJECTID",
+   "sqlType": "sqlTypeOther",
+   "length": 8,
+   "nullable": false,
+   "editable": false,
+   "domain": null,
+   "defaultValue": null
+  },
+  {
+   "name": "ChargeId_First",
+   "type": "esriFieldTypeInteger",
+   "alias": "ChargeId_First",
+   "sqlType": "sqlTypeOther",
+   "nullable": true,
+   "editable": true,
+   "domain": null,
+   "defaultValue": null
+  },
+  {
+   "name": "IncidentNumber",
+   "type": "esriFieldTypeString",
+   "alias": "IncidentNumber",
+   "sqlType": "sqlTypeOther",
+   "length": 12,
+   "nullable": true,
+   "editable": true,
+   "domain": null,
+   "defaultValue": null
+  },
+  {
+   "name": "ReportNumber",
+   "type": "esriFieldTypeString",
+   "alias": "ReportNumber",
+   "sqlType": "sqlTypeOther",
+   "length": 12,
+   "nullable": true,
+   "editable": true,
+   "domain": null,
+   "defaultValue": null
+  },
+  {
+   "name": "FireArmInvolved",
+   "type": "esriFieldTypeString",
+   "alias": "FireArmInvolved",
+   "sqlType": "sqlTypeOther",
+   "length": 3,
+   "nullable": true,
+   "editable": true,
+   "domain": null,
+   "defaultValue": null
+  },
+  {
+   "name": "ReportDate",
+   "type": "esriFieldTypeDate",
+   "alias": "ReportDate",
+   "sqlType": "sqlTypeOther",
+   "length": 8,
+   "nullable": true,
+   "editable": true,
+   "domain": null,
+   "defaultValue": null,
+   "precision": 1
+  },
+  {
+   "name": "OccurredFromDate",
+   "type": "esriFieldTypeDate",
+   "alias": "OccurredFromDate",
+   "sqlType": "sqlTypeOther",
+   "length": 8,
+   "nullable": true,
+   "editable": true,
+   "domain": null,
+   "defaultValue": null,
+   "precision": 1
+  },
+  {
+   "name": "OccurredToDate",
+   "type": "esriFieldTypeDate",
+   "alias": "OccurredToDate",
+   "sqlType": "sqlTypeOther",
+   "length": 8,
+   "nullable": true,
+   "editable": true,
+   "domain": null,
+   "defaultValue": null,
+   "precision": 1
+  },
+  {
+   "name": "Day_of_the_week",
+   "type": "esriFieldTypeString",
+   "alias": "Day_of_the_week",
+   "sqlType": "sqlTypeOther",
+   "length": 30,
+   "nullable": true,
+   "editable": true,
+   "domain": null,
+   "defaultValue": null
+  },
+  {
+   "name": "Day_Number",
+   "type": "esriFieldTypeInteger",
+   "alias": "Day_Number",
+   "sqlType": "sqlTypeOther",
+   "nullable": true,
+   "editable": true,
+   "domain": null,
+   "defaultValue": null
+  },
+  {
+   "name": "Part",
+   "type": "esriFieldTypeString",
+   "alias": "Part",
+   "sqlType": "sqlTypeOther",
+   "length": 8,
+   "nullable": true,
+   "editable": true,
+   "domain": null,
+   "defaultValue": null
+  },
+  {
+   "name": "Crime_Against",
+   "type": "esriFieldTypeString",
+   "alias": "Crime_Against",
+   "sqlType": "sqlTypeOther",
+   "length": 255,
+   "nullable": true,
+   "editable": true,
+   "domain": null,
+   "defaultValue": null
+  },
+  {
+   "name": "NibrsUcrCode",
+   "type": "esriFieldTypeString",
+   "alias": "NibrsUcrCode",
+   "sqlType": "sqlTypeOther",
+   "length": 8,
+   "nullable": true,
+   "editable": true,
+   "domain": null,
+   "defaultValue": null
+  },
+  {
+   "name": "NIBRS_Offense",
+   "type": "esriFieldTypeString",
+   "alias": "NIBRS_Offense",
+   "sqlType": "sqlTypeOther",
+   "length": 255,
+   "nullable": true,
+   "editable": true,
+   "domain": null,
+   "defaultValue": null
+  },
+  {
+   "name": "Vic_Count",
+   "type": "esriFieldTypeInteger",
+   "alias": "Vic_Count",
+   "sqlType": "sqlTypeOther",
+   "nullable": true,
+   "editable": true,
+   "domain": null,
+   "defaultValue": null
+  },
+  {
+   "name": "StreetAddress",
+   "type": "esriFieldTypeString",
+   "alias": "StreetAddress",
+   "sqlType": "sqlTypeOther",
+   "length": 257,
+   "nullable": true,
+   "editable": true,
+   "domain": null,
+   "defaultValue": null
+  },
+  {
+   "name": "LocationType",
+   "type": "esriFieldTypeString",
+   "alias": "LocationType",
+   "sqlType": "sqlTypeOther",
+   "length": 512,
+   "nullable": true,
+   "editable": true,
+   "domain": null,
+   "defaultValue": null
+  },
+  {
+   "name": "Longitude",
+   "type": "esriFieldTypeDouble",
+   "alias": "Longitude",
+   "sqlType": "sqlTypeOther",
+   "nullable": true,
+   "editable": true,
+   "domain": null,
+   "defaultValue": null
+  },
+  {
+   "name": "Latitude",
+   "type": "esriFieldTypeDouble",
+   "alias": "Latitude",
+   "sqlType": "sqlTypeOther",
+   "nullable": true,
+   "editable": true,
+   "domain": null,
+   "defaultValue": null
+  },
+  {
+   "name": "IsBiasMotivationInvolved",
+   "type": "esriFieldTypeString",
+   "alias": "IsBiasMotivationInvolved",
+   "sqlType": "sqlTypeOther",
+   "length": 8,
+   "nullable": true,
+   "editable": true,
+   "domain": null,
+   "defaultValue": null
+  },
+  {
+   "name": "event_watch",
+   "type": "esriFieldTypeString",
+   "alias": "event_watch",
+   "sqlType": "sqlTypeOther",
+   "length": 13,
+   "nullable": true,
+   "editable": true,
+   "domain": null,
+   "defaultValue": null
+  },
+  {
+   "name": "Zone",
+   "type": "esriFieldTypeString",
+   "alias": "Zone",
+   "sqlType": "sqlTypeOther",
+   "length": 15,
+   "nullable": true,
+   "editable": true,
+   "domain": null,
+   "defaultValue": null
+  },
+  {
+   "name": "Zone_int",
+   "type": "esriFieldTypeInteger",
+   "alias": "Zone_int",
+   "sqlType": "sqlTypeOther",
+   "nullable": true,
+   "editable": true,
+   "domain": null,
+   "defaultValue": null
+  },
+  {
+   "name": "BEAT",
+   "type": "esriFieldTypeString",
+   "alias": "BEAT",
+   "sqlType": "sqlTypeOther",
+   "length": 6,
+   "nullable": true,
+   "editable": true,
+   "domain": null,
+   "defaultValue": null
+  },
+  {
+   "name": "BEAT_Text",
+   "type": "esriFieldTypeString",
+   "alias": "BEAT_Text",
+   "sqlType": "sqlTypeOther",
+   "length": 512,
+   "nullable": true,
+   "editable": true,
+   "domain": null,
+   "defaultValue": null
+  },
+  {
+   "name": "DISTRICT",
+   "type": "esriFieldTypeInteger",
+   "alias": "DISTRICT",
+   "sqlType": "sqlTypeOther",
+   "nullable": true,
+   "editable": true,
+   "domain": null,
+   "defaultValue": null
+  },
+  {
+   "name": "NPU",
+   "type": "esriFieldTypeString",
+   "alias": "NPU",
+   "sqlType": "sqlTypeOther",
+   "length": 3,
+   "nullable": true,
+   "editable": true,
+   "domain": null,
+   "defaultValue": null
+  },
+  {
+   "name": "NhoodName",
+   "type": "esriFieldTypeString",
+   "alias": "NhoodName",
+   "sqlType": "sqlTypeOther",
+   "length": 50,
+   "nullable": true,
+   "editable": true,
+   "domain": null,
+   "defaultValue": null
+  },
+  {
+   "name": "CriminalGangActivityInvolved",
+   "type": "esriFieldTypeString",
+   "alias": "CriminalGangActivityInvolved",
+   "sqlType": "sqlTypeOther",
+   "length": 256,
+   "nullable": true,
+   "editable": true,
+   "domain": null,
+   "defaultValue": null
+  },
+  {
+   "name": "GAFamilyViolenceIndicator",
+   "type": "esriFieldTypeString",
+   "alias": "GAFamilyViolenceIndicator",
+   "sqlType": "sqlTypeOther",
+   "length": 256,
+   "nullable": true,
+   "editable": true,
+   "domain": null,
+   "defaultValue": null
+  },
+  {
+   "name": "NIBRS_Bucket",
+   "type": "esriFieldTypeString",
+   "alias": "Crime Grouping",
+   "sqlType": "sqlTypeOther",
+   "length": 256,
+   "nullable": true,
+   "editable": true,
+   "domain": null,
+   "defaultValue": null
+  }
+ ],
+ "objectIdField": "OBJECTID",
+ "maxRecordCount": 3
+}
