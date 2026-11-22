@@ -1,0 +1,191 @@
+{
+  "layer_url": "https://services3.arcgis.com/Et5Qfajgiyosiw4d/arcgis/rest/services/OpenDataWebsite_Crime_view/FeatureServer/0",
+  "fields": [
+    {
+      "name": "OBJECTID",
+      "type": "esriFieldTypeOID",
+      "alias": "OBJECTID",
+      "length": 8
+    },
+    {
+      "name": "ChargeId_First",
+      "type": "esriFieldTypeInteger",
+      "alias": "ChargeId_First",
+      "length": null
+    },
+    {
+      "name": "IncidentNumber",
+      "type": "esriFieldTypeString",
+      "alias": "IncidentNumber",
+      "length": 12
+    },
+    {
+      "name": "ReportNumber",
+      "type": "esriFieldTypeString",
+      "alias": "ReportNumber",
+      "length": 12
+    },
+    {
+      "name": "FireArmInvolved",
+      "type": "esriFieldTypeString",
+      "alias": "FireArmInvolved",
+      "length": 3
+    },
+    {
+      "name": "ReportDate",
+      "type": "esriFieldTypeDate",
+      "alias": "ReportDate",
+      "length": 8
+    },
+    {
+      "name": "OccurredFromDate",
+      "type": "esriFieldTypeDate",
+      "alias": "OccurredFromDate",
+      "length": 8
+    },
+    {
+      "name": "OccurredToDate",
+      "type": "esriFieldTypeDate",
+      "alias": "OccurredToDate",
+      "length": 8
+    },
+    {
+      "name": "Day_of_the_week",
+      "type": "esriFieldTypeString",
+      "alias": "Day_of_the_week",
+      "length": 30
+    },
+    {
+      "name": "Day_Number",
+      "type": "esriFieldTypeInteger",
+      "alias": "Day_Number",
+      "length": null
+    },
+    {
+      "name": "Part",
+      "type": "esriFieldTypeString",
+      "alias": "Part",
+      "length": 8
+    },
+    {
+      "name": "Crime_Against",
+      "type": "esriFieldTypeString",
+      "alias": "Crime_Against",
+      "length": 255
+    },
+    {
+      "name": "NibrsUcrCode",
+      "type": "esriFieldTypeString",
+      "alias": "NibrsUcrCode",
+      "length": 8
+    },
+    {
+      "name": "NIBRS_Offense",
+      "type": "esriFieldTypeString",
+      "alias": "NIBRS_Offense",
+      "length": 255
+    },
+    {
+      "name": "Vic_Count",
+      "type": "esriFieldTypeInteger",
+      "alias": "Vic_Count",
+      "length": null
+    },
+    {
+      "name": "StreetAddress",
+      "type": "esriFieldTypeString",
+      "alias": "StreetAddress",
+      "length": 257
+    },
+    {
+      "name": "LocationType",
+      "type": "esriFieldTypeString",
+      "alias": "LocationType",
+      "length": 512
+    },
+    {
+      "name": "Longitude",
+      "type": "esriFieldTypeDouble",
+      "alias": "Longitude",
+      "length": null
+    },
+    {
+      "name": "Latitude",
+      "type": "esriFieldTypeDouble",
+      "alias": "Latitude",
+      "length": null
+    },
+    {
+      "name": "IsBiasMotivationInvolved",
+      "type": "esriFieldTypeString",
+      "alias": "IsBiasMotivationInvolved",
+      "length": 8
+    },
+    {
+      "name": "event_watch",
+      "type": "esriFieldTypeString",
+      "alias": "event_watch",
+      "length": 13
+    },
+    {
+      "name": "Zone",
+      "type": "esriFieldTypeString",
+      "alias": "Zone",
+      "length": 15
+    },
+    {
+      "name": "Zone_int",
+      "type": "esriFieldTypeInteger",
+      "alias": "Zone_int",
+      "length": null
+    },
+    {
+      "name": "BEAT",
+      "type": "esriFieldTypeString",
+      "alias": "BEAT",
+      "length": 6
+    },
+    {
+      "name": "BEAT_Text",
+      "type": "esriFieldTypeString",
+      "alias": "BEAT_Text",
+      "length": 512
+    },
+    {
+      "name": "DISTRICT",
+      "type": "esriFieldTypeInteger",
+      "alias": "DISTRICT",
+      "length": null
+    },
+    {
+      "name": "NPU",
+      "type": "esriFieldTypeString",
+      "alias": "NPU",
+      "length": 3
+    },
+    {
+      "name": "NhoodName",
+      "type": "esriFieldTypeString",
+      "alias": "NhoodName",
+      "length": 50
+    },
+    {
+      "name": "CriminalGangActivityInvolved",
+      "type": "esriFieldTypeString",
+      "alias": "CriminalGangActivityInvolved",
+      "length": 256
+    },
+    {
+      "name": "GAFamilyViolenceIndicator",
+      "type": "esriFieldTypeString",
+      "alias": "GAFamilyViolenceIndicator",
+      "length": 256
+    },
+    {
+      "name": "NIBRS_Bucket",
+      "type": "esriFieldTypeString",
+      "alias": "Crime Grouping",
+      "length": 256
+    }
+  ]
+}
