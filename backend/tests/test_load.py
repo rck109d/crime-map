@@ -15,7 +15,7 @@ NOW = datetime(2026, 11, 22, 17, 0, tzinfo=ATLANTA)
 
 def run(tmp_path, layer, *argv):
     args = build_parser().parse_args(["load", "--data-dir", str(tmp_path), *argv])
-    return load(args, layer=layer, now=NOW)
+    return load(args, layer=layer, now=NOW, sleep=lambda seconds: None)
 
 
 def read(path):
@@ -173,6 +173,8 @@ def test_http_retries_dropped_connections(monkeypatch):
         def __exit__(self, *exc):
             return False
 
+        headers = {"Last-Modified": "Sun, 22 Nov 2026 23:19:05 GMT"}
+
         def read(self, *a):
             return b'{"count": 7}'
 
@@ -185,5 +187,74 @@ def test_http_retries_dropped_connections(monkeypatch):
         return Resp()
 
     monkeypatch.setattr(arcgis.urllib.request, "urlopen", fake_urlopen)
-    assert arcgis.http_get_json("https://example.invalid/q", {"where": "1=1"}) == {"count": 7}
+    body = arcgis.http_get_json("https://example.invalid/q", {"where": "1=1"})
+    assert body == {"count": 7, arcgis.VERSION_KEY: "Sun, 22 Nov 2026 23:19:05 GMT"}
     assert len(calls) == 3
+
+
+def _fill(server, records, n=300):
+    server.records[:] = [dict(records[5], OBJECTID=i, IncidentNumber=f"N{i}") for i in range(n)]
+
+
+def test_fetch_is_repeated_when_layer_is_republished(tmp_path, layer, server, records):
+    # APD's hourly republish: the layer empties, then comes back as a new version.
+    _fill(server, records)
+    run(tmp_path, layer, "--start", "2026-09-01", "--end", "2026-11-22")
+    saved = list(server.records)
+    server.calls = 0
+
+    def republish(srv):
+        if srv.calls == 3:
+            srv.records.clear()
+        if srv.calls == 12:
+            srv.records.extend(saved)
+            srv.records.append(dict(saved[0], OBJECTID=999, IncidentNumber="NEW"))
+            srv.version = "v2"
+
+    server.on_call = republish
+    assert run(tmp_path, layer, "--start", "2026-09-01", "--end", "2026-11-22") == 0
+    assert len(read_all(tmp_path)) == 301
+
+
+def test_partial_republish_is_not_written(tmp_path, layer, server, records):
+    # Half-loaded layer: internally consistent, but far short of the archive.
+    _fill(server, records)
+    run(tmp_path, layer, "--start", "2026-09-01", "--end", "2026-11-22")
+    first = snapshot(tmp_path)
+    del server.records[150:]
+    assert run(tmp_path, layer, "--start", "2026-09-01", "--end", "2026-11-22") == 3
+    assert snapshot(tmp_path) == first
+
+
+def test_growing_layer_is_not_written(tmp_path, layer, server, records):
+    # Still loading: the count after the pause no longer matches what was fetched.
+    _fill(server, records)
+    run(tmp_path, layer, "--start", "2026-09-01", "--end", "2026-11-22")
+    first = snapshot(tmp_path)
+    saved = list(server.records)
+    del server.records[280:]
+    real_sleep = {"n": 0}
+
+    def sleep(seconds):
+        real_sleep["n"] += 1
+        if len(server.records) < len(saved) - 1:
+            server.records.append(saved[len(server.records)])
+
+    args = build_parser().parse_args(
+        ["load", "--data-dir", str(tmp_path), "--start", "2026-09-01", "--end", "2026-11-22"]
+    )
+    assert load(args, layer=layer, now=NOW, sleep=sleep) == 4
+    assert snapshot(tmp_path) == first
+
+
+def test_gives_up_without_writing_if_source_never_settles(tmp_path, layer, server):
+    run(tmp_path, layer, "--start", "2026-09-01", "--end", "2026-11-22")
+    first = snapshot(tmp_path)
+
+    def churn(srv):
+        srv.version = f"v{srv.calls}"
+
+    server.on_call = churn
+    del server.records[2:]
+    assert run(tmp_path, layer, "--start", "2026-09-01", "--end", "2026-11-22") == 4
+    assert snapshot(tmp_path) == first

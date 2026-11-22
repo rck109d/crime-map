@@ -28,9 +28,12 @@ gh workflow run update-data.yml -f start=2024-01-01 -f end=2024-12-31
 gh workflow run update-data.yml -f full=true             # entire layer
 ```
 
-The loader refuses to write a refresh that would shrink the archived records
-in its range sharply (below 50% for a date range, 90% for a full reload),
-since that usually means the source is broken; pass `force` to override.
+APD republishes the whole layer about once an hour, and for a minute or so it
+is empty or half loaded. The loader therefore only accepts a fetch whose
+responses all come from one publication and whose record count is unchanged
+after a pause, retrying for several minutes otherwise. It also refuses to
+write a refresh that would leave under 90% of the records already archived
+for its range; pass `force` to override that.
 
 ## Running locally
 

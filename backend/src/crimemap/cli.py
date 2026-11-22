@@ -5,10 +5,12 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+import time as time_module
+from collections.abc import Callable
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
 
-from .arcgis import DEFAULT_LAYER_URL, Layer, utc_literal
+from .arcgis import DEFAULT_LAYER_URL, ArcGISError, Layer, range_where, utc_literal
 from .records import ATLANTA, SANE_EARLIEST, normalize
 from .store import Archive, write_source_snapshot
 
@@ -18,8 +20,16 @@ DATASET = "nibrs"
 
 # Refuse to commit a refresh that loses this much of what is already archived;
 # it far more likely means the source is broken than that crime fell.
-SHRINK_LIMIT_WINDOW = 0.5
-SHRINK_LIMIT_ALL = 0.9
+SHRINK_LIMIT = 0.9
+
+# APD republishes the whole layer roughly hourly, and for a minute or so it is
+# empty or partly loaded. A fetch only counts if every response came from the
+# same publication and the record count is unchanged after a pause; otherwise
+# the fetch is repeated.
+FETCH_ATTEMPTS = 6
+RETRY_WAIT_SECONDS = 120
+EXIT_SHRINK = 3
+EXIT_UNSTABLE = 4
 
 
 def local_midnight(d: date) -> datetime:
@@ -58,6 +68,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     load.add_argument("--layer-url", default=DEFAULT_LAYER_URL)
     load.add_argument(
+        "--settle-seconds",
+        type=int,
+        default=90,
+        help="pause before re-checking that the source did not change mid-fetch (default 90)",
+    )
+    load.add_argument(
         "--summary-file",
         type=Path,
         help="write a one-line description of the change (for commit messages)",
@@ -70,12 +86,16 @@ def main(argv: list[str] | None = None) -> int:
     return load(args)
 
 
-def load(args: argparse.Namespace, layer: Layer | None = None, now: datetime | None = None) -> int:
+def load(
+    args: argparse.Namespace,
+    layer: Layer | None = None,
+    now: datetime | None = None,
+    sleep: Callable[[float], None] = time_module.sleep,
+) -> int:
     now = now or datetime.now(ATLANTA)
     layer = layer or Layer(args.layer_url)
     dataset_dir = args.data_dir / DATASET
     archive = Archive.load(dataset_dir)
-    field_types = layer.field_types
 
     if args.all:
         if args.start or args.end:
@@ -83,15 +103,12 @@ def load(args: argparse.Namespace, layer: Layer | None = None, now: datetime | N
             return 2
         start, end = SANE_EARLIEST, now + timedelta(days=2)
         label = "all records"
-        print(f"Fetching the full layer from {layer.url}", file=sys.stderr)
-        raw = layer.query_range(start, end)
         unusual = (
             f"ReportDate IS NULL OR ReportDate < {utc_literal(start)} "
             f"OR ReportDate >= {utc_literal(end)}"
         )
-        raw += layer.query_all(unusual)
+        count_where = "1=1"
         before = len(archive.all_rows())
-        limit = SHRINK_LIMIT_ALL
     else:
         end_day = args.end or now.date()
         start_day = args.start or (end_day - timedelta(days=args.days - 1))
@@ -100,20 +117,59 @@ def load(args: argparse.Namespace, layer: Layer | None = None, now: datetime | N
             return 2
         start, end = local_midnight(start_day), local_midnight(end_day + timedelta(days=1))
         label = f"{start_day} .. {end_day}"
-        print(f"Fetching report dates {label} from {layer.url}", file=sys.stderr)
-        raw = layer.query_range(start, end)
+        unusual = None
+        count_where = range_where(start, end)
         before = archive.rows_in_window(start, end)
-        limit = SHRINK_LIMIT_WINDOW
 
+    def fetch() -> list[dict]:
+        raw = layer.query_range(start, end)
+        if unusual:
+            raw += layer.query_all(unusual)
+        return raw
+
+    print(f"Fetching {label} from {layer.url}", file=sys.stderr)
+    raw: list[dict] = []
+    failure = EXIT_UNSTABLE
+    for attempt in range(1, FETCH_ATTEMPTS + 1):
+        problem = None
+        layer.versions.clear()
+        try:
+            raw = fetch()
+            sleep(args.settle_seconds)
+            recount = layer.count(count_where)
+        except ArcGISError as exc:
+            problem, failure = str(exc), EXIT_UNSTABLE
+        else:
+            if len(layer.versions) > 1:
+                problem = "the layer was republished during the fetch"
+                failure = EXIT_UNSTABLE
+            elif recount != len(raw):
+                problem = f"fetched {len(raw)} records but the source now reports {recount}"
+                failure = EXIT_UNSTABLE
+            elif before >= 200 and len(raw) < before * SHRINK_LIMIT and not args.force:
+                problem = (
+                    f"the source has {len(raw)} records where the archive has {before}; "
+                    "it looks incomplete"
+                )
+                failure = EXIT_SHRINK
+        if problem is None:
+            break
+        print(f"Attempt {attempt}/{FETCH_ATTEMPTS}: {problem}", file=sys.stderr)
+        if attempt == FETCH_ATTEMPTS:
+            if failure == EXIT_SHRINK:
+                print(
+                    f"Refusing to replace {before} archived records with {len(raw)}. "
+                    "Re-run with --force if this drop is real.",
+                    file=sys.stderr,
+                )
+            else:
+                print("The source never settled; nothing was written.", file=sys.stderr)
+            return failure
+        sleep(RETRY_WAIT_SECONDS)
+
+    field_types = layer.field_types
     fresh = [normalize(attrs, field_types) for attrs in raw]
     print(f"Fetched {len(fresh)} records (archive had {before} in that range)", file=sys.stderr)
-    if before >= 200 and len(fresh) < before * limit and not args.force:
-        print(
-            f"Refusing to replace {before} archived records with {len(fresh)}: the source looks "
-            "incomplete. Re-run with --force if this drop is real.",
-            file=sys.stderr,
-        )
-        return 3
 
     source_columns = [f["name"] for f in layer.fields if f["name"] != layer.oid_field]
     archive.set_columns(source_columns)

@@ -20,6 +20,8 @@ def _ms(literal: str) -> int:
 
 
 def _matcher(where: str):
+    if where == "1=1":
+        return lambda r: True
     if m := re.fullmatch(rf"ReportDate >= {TS} AND ReportDate < {TS}", where):
         lo, hi = _ms(m[1]), _ms(m[2])
         return lambda r: r["ReportDate"] is not None and lo <= r["ReportDate"] < hi
@@ -37,9 +39,16 @@ class FakeServer:
         self.meta = meta
         self.calls = 0
         self.on_page = None  # hook to simulate a republish mid-fetch
+        self.on_call = None  # hook run before every request
+        self.version = "v1"  # stands in for the Last-Modified header
 
     def __call__(self, url: str, params: dict[str, str]) -> dict:
         self.calls += 1
+        if self.on_call:
+            self.on_call(self)
+        return {**self._respond(url, params), "_layer_version": self.version}
+
+    def _respond(self, url: str, params: dict[str, str]) -> dict:
         if not url.endswith("/query"):
             return self.meta
         match = _matcher(params["where"])
@@ -55,6 +64,11 @@ class FakeServer:
             "features": [{"attributes": copy.deepcopy(r)} for r in page],
             "exceededTransferLimit": off + n < len(hits),
         }
+
+
+@pytest.fixture(autouse=True)
+def no_real_sleep(monkeypatch):
+    monkeypatch.setattr("crimemap.arcgis.time.sleep", lambda seconds: None)
 
 
 @pytest.fixture

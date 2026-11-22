@@ -23,6 +23,12 @@ USER_AGENT = "crimemap-archiver/0.2"
 CHUNK_MAX_RECORDS = 10_000
 
 
+# Every response carries the layer's last edit time in its Last-Modified header.
+# The fetcher passes it along under this key so a run can tell whether all of its
+# responses came from the same publication of the layer.
+VERSION_KEY = "_layer_version"
+
+
 class ArcGISError(RuntimeError):
     pass
 
@@ -47,9 +53,12 @@ def http_get_json(url: str, params: dict[str, str], *, attempts: int = 6) -> dic
             req = urllib.request.Request(full, headers={"User-Agent": USER_AGENT})
             with urllib.request.urlopen(req, timeout=90) as resp:
                 body = json.load(resp)
+                version = resp.headers.get("Last-Modified")
             if "error" in body:
                 # ArcGIS reports many failures (including overload) as HTTP 200.
                 raise ArcGISError(f"ArcGIS error: {body['error']}")
+            if version:
+                body[VERSION_KEY] = version
             return body
         except (OSError, http.client.HTTPException, ArcGISError, json.JSONDecodeError) as exc:
             # OSError covers URLError, timeouts and connections dropped mid-body.
@@ -66,8 +75,16 @@ def http_get_json(url: str, params: dict[str, str], *, attempts: int = 6) -> dic
 class Layer:
     def __init__(self, url: str = DEFAULT_LAYER_URL, fetch: Fetcher = http_get_json):
         self.url = url.rstrip("/")
-        self._fetch = fetch
+        self._raw_fetch = fetch
         self._meta: dict | None = None
+        self.versions: set[str] = set()
+
+    def _fetch(self, url: str, params: dict[str, str]) -> dict:
+        body = self._raw_fetch(url, params)
+        version = body.get(VERSION_KEY)
+        if version:
+            self.versions.add(version)
+        return body
 
     @property
     def metadata(self) -> dict:
