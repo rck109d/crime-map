@@ -12,6 +12,7 @@ from pathlib import Path
 
 from .arcgis import DEFAULT_LAYER_URL, ArcGISError, Layer, range_where, utc_literal
 from .records import ATLANTA, SANE_EARLIEST, normalize
+from .site import build_site
 from .store import Archive, write_source_snapshot
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -78,11 +79,29 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         help="write a one-line description of the change (for commit messages)",
     )
+    site = sub.add_parser("build-site", help="derive the web map's data files from the archive")
+    site.add_argument(
+        "--data-dir", type=Path, default=Path(os.environ.get("CRIMEMAP_DATA_DIR", DEFAULT_DATA_DIR))
+    )
+    site.add_argument(
+        "--out",
+        type=Path,
+        default=REPO_ROOT / "frontend" / "public" / "data",
+        help="output directory (default frontend/public/data)",
+    )
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.command == "build-site":
+        manifest = build_site(args.data_dir, args.out)
+        size = sum(p.stat().st_size for p in args.out.rglob("*") if p.is_file())
+        print(
+            f"Built site data for {manifest['count']} incidents through {manifest['through']} "
+            f"({size / 1e6:.1f} MB in {args.out})"
+        )
+        return 0
     return load(args)
 
 
