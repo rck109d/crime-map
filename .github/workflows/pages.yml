@@ -1,0 +1,54 @@
+name: Deploy site
+
+on:
+  push:
+    branches: [master]
+    paths: ["frontend/**", "backend/**", "data/**", ".github/workflows/pages.yml"]
+  # The daily data commit is pushed by a workflow, and such pushes do not
+  # trigger other workflows, so follow the refresh explicitly.
+  workflow_run:
+    workflows: ["Update incident data"]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Build site data from the archive
+        run: uv run --frozen crimemap build-site
+        working-directory: backend
+      - name: Build the web app
+        run: npm ci && npm run build
+        working-directory: frontend
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: frontend/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

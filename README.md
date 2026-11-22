@@ -1,21 +1,51 @@
 # crime-map
 
-Long-term archive of Atlanta Police Department crime incidents, refreshed
-automatically from APD's open data portal, with a web map to come.
+A map of Atlanta Police Department incident reports since 2021, and the
+long-term archive behind it.
 
-The data lives in [`data/`](data/) as plain monthly CSV files; see
-[`data/SCHEMA.md`](data/SCHEMA.md) for layout, columns and caveats.
+**Site: <https://rck109d.github.io/crime-map/>**
 
-## Layout
+- Every incident as a point, colored by NIBRS class, or binned into a
+  hexagon density map
+- Filter by date range, offense, firearm involvement, neighborhood / NPU /
+  police zone, or an area you draw on the map
+- Daily trend lines with adjustable smoothing, a time-of-week grid, and
+  rankings by offense and area
+- Tap any spot for the incidents there; download the filtered set as CSV or KML
+- Every view has a shareable URL
+
+The data lives in [`data/`](data/) as plain monthly CSV files, refreshed from
+APD's open data portal every day; see [`data/SCHEMA.md`](data/SCHEMA.md) for
+layout, columns and caveats.
+
+## How it fits together
+
+```
+APD open data (ArcGIS)
+   │  crimemap load            daily, GitHub Actions
+   ▼
+data/nibrs/YYYY/YYYY-MM.csv    committed: the source of truth
+   │  crimemap build-site      on every deploy
+   ▼
+manifest.json, points-YYYY.bin, detail/YYYY-MM.json    not committed
+   │
+   ▼
+frontend/ (TypeScript, Preact, MapLibre)  →  GitHub Pages
+```
+
+GitHub Pages only serves files, so there is no server: the Python backend
+turns the archive into compact files (about 0.45 MB per year of incidents),
+and the browser filters and counts them itself. Per-incident text such as
+addresses is fetched a month at a time, only when an incident is opened.
 
 | Path | What |
 |---|---|
-| `data/` | The archive (committed; the source of truth) |
-| `backend/` | Python loader (`crimemap` CLI) |
+| `data/` | The archive (committed) |
+| `backend/` | Python: `crimemap load` (archive) and `crimemap build-site` (site data) |
+| `frontend/` | The web app |
 | `.github/workflows/update-data.yml` | Daily refresh that commits new data |
-| `.github/workflows/test.yml` | Backend lint and tests |
-
-A TypeScript map frontend and an API over the archive are planned.
+| `.github/workflows/pages.yml` | Builds and deploys the site after each refresh or code change |
+| `.github/workflows/test.yml` | Lint and tests for both halves |
 
 ## Refreshing the data
 
@@ -37,20 +67,31 @@ for its range; pass `force` to override that.
 
 ## Running locally
 
-Requires [uv](https://docs.astral.sh/uv/). The loader uses only the Python
-standard library.
+Requires [uv](https://docs.astral.sh/uv/) and Node 22. The backend uses only
+the Python standard library.
 
 ```sh
 cd backend
 uv run crimemap load                                  # last 90 days into ../data
 uv run crimemap load --start 2026-11-01 --end 2026-11-01
 uv run crimemap load --all                            # full reload (~3 minutes)
+uv run crimemap build-site                            # write frontend/public/data
 uv run pytest
+
+cd ../frontend
+npm install
+npm run dev                                           # http://localhost:5173
+npm test && npm run build
 ```
+
+One-time setup for a fork: in the repository's **Settings → Pages**, set
+**Source** to **GitHub Actions**.
 
 ## History
 
 This repository began in 2015 as a Groovy loader for APD's former map service,
 which wrote incidents to a local MongoDB through Tor. That service is gone; the
-Groovy code remains in git history. Its predecessor, with a desktop map viewer
-and heat maps, is [`atl-pd-data`](https://github.com/rck109d/atl-pd-data).
+Groovy code remains in git history. Its predecessor,
+[`atl-pd-data`](https://github.com/rck109d/atl-pd-data), was a Java desktop
+tool with a map explorer, heat maps, smoothed daily-crime graphs, polygon
+selection and KML export; the web app here carries those features forward.

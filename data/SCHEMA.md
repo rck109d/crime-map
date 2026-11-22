@@ -83,6 +83,14 @@ than the window are never modified or deleted by the daily run; they change
 only through a manual run. Every change is a git commit, so a record APD later
 removes is still recoverable from history.
 
+## The web map's files
+
+The site at <https://rck109d.github.io/crime-map/> does not read these CSVs
+directly. On each deploy, `crimemap build-site` derives compact files from
+them (`manifest.json`, `points-YYYY.bin`, `detail/YYYY-MM.json`); those are
+build output and are not committed. The map shows report dates from 2021
+onward and leaves out `unusual-dates.csv`.
+
 ## Querying
 
 The CSVs are the source of truth; build any database from them. With DuckDB:

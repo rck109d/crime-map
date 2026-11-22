@@ -2,9 +2,9 @@ name: Test
 
 on:
   push:
-    paths: ["backend/**", ".github/workflows/test.yml"]
+    paths: ["backend/**", "frontend/**", ".github/workflows/test.yml"]
   pull_request:
-    paths: ["backend/**", ".github/workflows/test.yml"]
+    paths: ["backend/**", "frontend/**", ".github/workflows/test.yml"]
 
 jobs:
   backend:
@@ -19,3 +19,24 @@ jobs:
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run pytest -q
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      # Real site data first, so the tests check that the TypeScript reader
+      # understands exactly what the Python builder writes.
+      - run: uv run --frozen crimemap build-site
+        working-directory: backend
+      - run: npm ci
+        working-directory: frontend
+      - run: npm test
+        working-directory: frontend
+      - run: npm run build
+        working-directory: frontend
