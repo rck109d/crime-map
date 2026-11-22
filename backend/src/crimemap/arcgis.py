@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import http.client
 import json
 import sys
 import time
@@ -50,7 +51,8 @@ def http_get_json(url: str, params: dict[str, str], *, attempts: int = 6) -> dic
                 # ArcGIS reports many failures (including overload) as HTTP 200.
                 raise ArcGISError(f"ArcGIS error: {body['error']}")
             return body
-        except (urllib.error.URLError, TimeoutError, ArcGISError, json.JSONDecodeError) as exc:
+        except (OSError, http.client.HTTPException, ArcGISError, json.JSONDecodeError) as exc:
+            # OSError covers URLError, timeouts and connections dropped mid-body.
             if isinstance(exc, urllib.error.HTTPError) and exc.code < 500 and exc.code != 429:
                 raise
             if attempt == attempts:

@@ -160,3 +160,30 @@ def test_large_ranges_are_split(layer, server, records, monkeypatch):
 def test_rejects_bad_dates(bad):
     with pytest.raises(SystemExit):
         build_parser().parse_args(["load", "--start", bad])
+
+
+def test_http_retries_dropped_connections(monkeypatch):
+    monkeypatch.setattr(arcgis.time, "sleep", lambda s: None)
+    calls = []
+
+    class Resp:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def read(self, *a):
+            return b'{"count": 7}'
+
+    def fake_urlopen(req, timeout):
+        calls.append(req.full_url)
+        if len(calls) == 1:
+            raise ConnectionResetError("reset mid-body")
+        if len(calls) == 2:
+            raise arcgis.http.client.IncompleteRead(b"")
+        return Resp()
+
+    monkeypatch.setattr(arcgis.urllib.request, "urlopen", fake_urlopen)
+    assert arcgis.http_get_json("https://example.invalid/q", {"where": "1=1"}) == {"count": 7}
+    assert len(calls) == 3
