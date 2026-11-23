@@ -38,6 +38,11 @@ export const GROUP_LONG_LABELS = [
   "Crimes against society",
   "No offense classification",
 ];
+/**
+ * Order the offense picker lists its sections in: property, society, persons,
+ * then unclassified. Only the order differs; each group keeps its own colour.
+ */
+export const GROUP_SECTION_ORDER = [1, 2, 0, 3];
 
 export function hexToRgb(hex: string): [number, number, number] {
   const n = parseInt(hex.slice(1), 16);
