@@ -9,7 +9,8 @@ import { makeGeo, pointInRing } from "./geo";
 import { binHex, classOf, hexAt, hexBreaks, hexRing, rowsInHex } from "./hexbin";
 import { groupByIncident, incidentRun } from "./incidents";
 import { nominatimUrl, parseNominatim, parsePhoton, photonUrl } from "./places";
-import { displayName, searchAreas, searchPlaces, tokenize, type SearchIndex } from "./search";
+import { convexHull } from "./hull";
+import { displayName, searchAreas, searchPlaces, streetFilter, tokenize, type SearchIndex } from "./search";
 import { gaussianSmooth, niceTicks } from "./smooth";
 import {
   FLAG_FAMILY,
@@ -491,5 +492,57 @@ describe("outside place search", () => {
       { label: "Unnamed Road", note: "Swimming pool · Atlanta", lng: -84.3, lat: 33.7 },
     ]);
     expect(parseNominatim({ error: "blocked" }, box)).toEqual([]);
+  });
+});
+
+describe("street filter", () => {
+  const index: SearchIndex = {
+    streets: [
+      // number, x, y, incidents, address id
+      { n: "PEACHTREE ST NE", c: 9, a: [100, 0, 0, 4, 11, 200, 10, 0, 3, 12, 300, 10, 10, 2, 13] },
+      { n: "10TH ST NE", c: 5, a: [33, 60, 70, 5, 21] },
+    ],
+    crossings: [
+      ["PEACHTREE ST NE / 10TH ST NE", 0, 10, 6, 31],
+      ["PRYOR ST / BASS ST", 5, 5, 2, 32],
+    ],
+  };
+
+  it("collects a street's address ids, including intersections that name it", () => {
+    const filter = streetFilter(index, "PEACHTREE ST NE")!;
+    expect(filter.ids).toEqual([11, 12, 13, 31]);
+    expect(filter.box).toEqual([0, 0, 10, 10]);
+    expect(filter.ring).toEqual([[0, 0], [10, 0], [10, 10], [0, 10]]); // outline built on the device
+    expect(streetFilter(index, "10TH ST NE")!.ids).toEqual([21, 31]);
+    expect(streetFilter(index, "NO SUCH ST")).toBeNull();
+  });
+
+  it("gives a one-address street no shape to draw", () => {
+    const lone: SearchIndex = { streets: [{ n: "HOGUE ST NE", c: 1, a: [64, 5, 6, 1, 9] }], crossings: [] };
+    const filter = streetFilter(lone, "HOGUE ST NE")!;
+    expect(filter.ring).toEqual([[5, 6]]);
+    expect(filter.box).toEqual([5, 6, 5, 6]);
+  });
+
+  it("limits every count to rows at the street's addresses", () => {
+    // Rows 0 and 4 share address 70000; row 1 has address 7.
+    const mask = new Uint8Array(70001);
+    mask[70000] = 1;
+    const s = summarize(points, { ...all, addresses: mask }, sizes);
+    expect(s.total).toBe(2);
+    expect([...s.style]).toEqual([0, 255, 255, 255, 0, 255]);
+    expect([...s.byOffense]).toEqual([2, 0, 0]);
+    // An id beyond the table is simply not on the street.
+    expect(summarize(points, { ...all, addresses: new Uint8Array(8).fill(1) }, sizes).total).toBe(4);
+  });
+});
+
+describe("convex hull", () => {
+  it("keeps only the outer corners", () => {
+    const square: [number, number][] = [[0, 0], [4, 0], [4, 4], [0, 4]];
+    expect(convexHull([...square, [1, 1], [2, 3], [4, 2], ...square])).toEqual([[0, 0], [4, 0], [4, 4], [0, 4]]);
+    expect(convexHull([[5, 5]])).toEqual([[5, 5]]);
+    expect(convexHull([[0, 0], [2, 2], [1, 1]])).toEqual([[0, 0], [2, 2]]);
+    expect(convexHull([])).toEqual([]);
   });
 });

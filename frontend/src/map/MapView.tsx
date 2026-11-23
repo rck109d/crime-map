@@ -27,6 +27,7 @@ import {
   points,
   polygon,
   selection,
+  street,
   summary,
   theme,
   type LngLat,
@@ -202,20 +203,25 @@ function areaRing(kind: AreaKind, id: number): LngLat[] | null {
 }
 
 function pushRegion() {
+  const g = geo.value;
   const a = area.value;
-  const ring = a ? areaRing(a.kind, a.id) : null;
-  setData(
-    "region",
-    // An area whose incidents share one spot or one line has no shape to draw.
-    ring && ring.length >= 3
-      ? {
-          type: "FeatureCollection",
-          features: [
-            { type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [[...ring, ring[0]]] } },
-          ],
-        }
-      : empty,
-  );
+  const st = street.value;
+  const rings: LngLat[][] = [];
+  const areaOutline = a ? areaRing(a.kind, a.id) : null;
+  if (areaOutline) rings.push(areaOutline);
+  // A street's outline is worked out on the device, from its addresses' positions.
+  if (st && g) rings.push(st.ring.map(([x, y]) => [g.lng(x), g.lat(y)] as LngLat));
+  setData("region", {
+    type: "FeatureCollection",
+    // One spot, or points all on one line, have no shape to draw.
+    features: rings
+      .filter((ring) => ring.length >= 3)
+      .map((ring) => ({
+        type: "Feature",
+        properties: {},
+        geometry: { type: "Polygon", coordinates: [[...ring, ring[0]]] },
+      })),
+  });
 }
 
 function pushArea() {
@@ -532,6 +538,7 @@ export function MapView() {
       }),
       effect(() => {
         area.value;
+        street.value;
         manifest.value;
         pushRegion();
       }),

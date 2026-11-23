@@ -109,7 +109,7 @@ export function About({ open, onClose }: { open: boolean; onClose: () => void })
           </li>
           <li>Dates filter by when an incident was reported, which can be days or months after it happened.</li>
           <li>
-            The dashed outline shown for a neighborhood, NPU or zone is drawn around every incident recorded there.
+            The dashed outline shown for a neighborhood, NPU, zone or street is drawn around every incident recorded there.
             It shows roughly where the area is; it is not an official boundary.
           </li>
           <li>

@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { loadSearchIndex } from "../data/load";
 import { nominatimUrl, parseNominatim, parsePhoton, photonUrl, type PlaceHit } from "../data/places";
-import { displayName, searchAreas, searchPlaces, type Hit, type SearchIndex } from "../data/search";
+import { displayName, searchAreas, searchPlaces, streetFilter, type Hit, type SearchIndex } from "../data/search";
 import { mapApi } from "../map/MapView";
-import { area, areaKind, geo, manifest, polygon } from "../state";
+import { area, areaKind, geo, manifest, polygon, street } from "../state";
 import { areaLabel } from "./FilterBar";
 import { fmt } from "./format";
 import { CloseIcon, SearchIcon } from "./icons";
@@ -58,8 +58,9 @@ interface Pending {
   title: string;
   /** The active location filters, as they would be named in a sentence. */
   filters: string[];
-  /** Whether removing filters should include the area filter. */
+  /** Whether removing filters should include the area filter, and the street filter. */
   dropArea: boolean;
+  dropStreet: boolean;
   go: () => void;
 }
 
@@ -164,24 +165,29 @@ export function Search() {
    * outside it, so the place searched for could look empty; when one is
    * active, ask first whether to remove it.
    */
-  const goTo = (title: string, replacesArea: boolean, go: () => void) => {
+  const goTo = (title: string, replaces: "area" | "street" | null, go: () => void) => {
     const filters: string[] = [];
-    // Picking a neighborhood replaces the area filter anyway, so that one is not asked about.
-    if (area.value && !replacesArea) filters.push(areaLabel());
+    // Picking a neighborhood replaces the area filter anyway, and picking a
+    // street replaces the street filter, so those are not asked about.
+    const dropArea = replaces !== "area";
+    const dropStreet = replaces !== "street";
+    if (area.value && dropArea) filters.push(areaLabel());
+    if (street.value && dropStreet) filters.push(displayName(street.value.name));
     if (polygon.value) filters.push("the area you drew");
     if (filters.length === 0) {
       close();
       go();
       return;
     }
-    setPending({ title, filters, dropArea: !replacesArea, go });
+    setPending({ title, filters, dropArea, dropStreet, go });
   };
 
   const settle = (remove: boolean) => {
     if (!pending) return;
-    const { go, dropArea } = pending;
+    const { go, dropArea, dropStreet } = pending;
     if (remove) {
       if (dropArea) area.value = null;
+      if (dropStreet) street.value = null;
       polygon.value = null;
     }
     close();
@@ -201,22 +207,26 @@ export function Search() {
   const pick = (hit: Hit) => {
     if (!g) return;
     if (hit.kind === "area") {
-      goTo(hit.label, true, () => {
+      goTo(hit.label, "area", () => {
         area.value = { kind: hit.areaKind, id: hit.id };
         areaKind.value = hit.areaKind;
         mapApi.fitArea(hit.areaKind, hit.id);
       });
     } else if (hit.kind === "street") {
+      // Show only this street's incidents, outline it, and frame it.
       const [minX, minY, maxX, maxY] = hit.box;
-      goTo(displayName(hit.label), false, () => mapApi.fitBox(g.lng(minX), g.lat(minY), g.lng(maxX), g.lat(maxY)));
+      goTo(displayName(hit.label), "street", () => {
+        street.value = index ? streetFilter(index, hit.label) : null;
+        mapApi.fitBox(g.lng(minX), g.lat(minY), g.lng(maxX), g.lat(maxY));
+      });
     } else {
       const label = displayName(hit.label);
-      goTo(label, false, () => mapApi.showAddress([g.lng(hit.x), g.lat(hit.y)], hit.id, label, hit.count));
+      goTo(label, null, () => mapApi.showAddress([g.lng(hit.x), g.lat(hit.y)], hit.id, label, hit.count));
     }
   };
 
   const pickPlace = (hit: PlaceHit) => {
-    goTo(hit.label, false, () => mapApi.showPlace([hit.lng, hit.lat], hit.label));
+    goTo(hit.label, null, () => mapApi.showPlace([hit.lng, hit.lat], hit.label));
   };
 
   const submit = () => {

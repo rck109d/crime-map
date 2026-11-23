@@ -17,6 +17,11 @@ export interface Filters {
   polygon: Ring | null;
   /** Flag bits a row must all have (firearm, family violence, Part I); 0 for no requirement. */
   requireFlags: number;
+  /**
+   * Street filter: addresses[id] is 1 for each address id to keep. Null for no
+   * such filter. A lookup table rather than a Set, as it is read once per row.
+   */
+  addresses?: Uint8Array | null;
 }
 
 export const HIDDEN = 255;
@@ -92,9 +97,12 @@ export function summarize(points: Points, f: Filters, sizes: Sizes): Summary {
   let firearm = 0;
   let familyViolence = 0;
   const required = f.requireFlags;
+  const onStreet = f.addresses ?? null;
+  const address = points.address;
 
   for (let i = i0; i < i1; i++) {
     if ((flags[i] & required) !== required) continue;
+    if (onStreet && !onStreet[address[i]]) continue;
     const px = x[i];
     const py = y[i];
     if (ring) {

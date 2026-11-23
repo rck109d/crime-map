@@ -4,6 +4,7 @@
  * leaves it.
  */
 import type { AreaKind } from "./filter";
+import { convexHull, type XY } from "./hull";
 
 export interface StreetEntry {
   /** Street name as APD writes it, e.g. "PEACHTREE RD NE". */
@@ -190,4 +191,49 @@ export function displayName(text: string): string {
       return word.charAt(0) + word.slice(1).toLowerCase();
     })
     .join(" ");
+}
+
+/** Everything needed to filter the map to one street and show where it is. */
+export interface StreetFilter {
+  /** Street name as APD writes it, e.g. "PEACHTREE RD NE". */
+  name: string;
+  /** Ids of every address on the street, and of intersections that name it. */
+  ids: number[];
+  /** Outline around those addresses (quantized), computed here from their positions. */
+  ring: XY[];
+  /** [minX, minY, maxX, maxY] of the same positions. */
+  box: [number, number, number, number];
+}
+
+/**
+ * Work out a street's filter from the index: no extra data is stored per
+ * street, the address ids and positions it already lists are enough.
+ */
+export function streetFilter(index: SearchIndex, name: string): StreetFilter | null {
+  const street = index.streets.find((s) => s.n === name);
+  if (!street) return null;
+  const ids: number[] = [];
+  const positions: XY[] = [];
+  for (let i = 0; i < street.a.length; i += STRIDE) {
+    positions.push([street.a[i + 1], street.a[i + 2]]);
+    ids.push(street.a[i + 4]);
+  }
+  // "PEACHTREE ST NE / 10TH ST NE" belongs to both of its streets.
+  for (const [text, x, y, , id] of index.crossings) {
+    if (text.split("/").some((part) => part.trim() === name)) {
+      positions.push([x, y]);
+      ids.push(id);
+    }
+  }
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const [x, y] of positions) {
+    if (x < minX) minX = x;
+    if (x > maxX) maxX = x;
+    if (y < minY) minY = y;
+    if (y > maxY) maxY = y;
+  }
+  return { name, ids, ring: convexHull(positions), box: [minX, minY, maxX, maxY] };
 }

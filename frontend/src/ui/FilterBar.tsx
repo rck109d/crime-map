@@ -1,6 +1,7 @@
 import type { Signal } from "@preact/signals";
 import { useMemo, useState } from "preact/hooks";
 import { formatLong, formatRange } from "../data/dates";
+import { displayName } from "../data/search";
 import {
   activeFilterCount,
   applied,
@@ -19,6 +20,7 @@ import {
   requested,
   resolvePreset,
   setRange,
+  street,
   summary,
   theme,
 } from "../state";
@@ -59,6 +61,16 @@ export function FilterBar() {
       {area.value && (
         <button class="chip chip-on" onClick={() => (area.value = null)} aria-label={`Remove area filter: ${areaLabel()}`}>
           <span class="chip-text">{areaLabel()}</span>
+          <CloseIcon size={14} />
+        </button>
+      )}
+      {street.value && (
+        <button
+          class="chip chip-on"
+          onClick={() => (street.value = null)}
+          aria-label={`Remove street filter: ${displayName(street.value.name)}`}
+        >
+          <span class="chip-text">{displayName(street.value.name)}</span>
           <CloseIcon size={14} />
         </button>
       )}

@@ -3,7 +3,8 @@ import { makeCalendar, type Calendar } from "./data/dates";
 import { summarize, type AreaKind, type Filters, type Summary } from "./data/filter";
 import { combineYears } from "./data/format";
 import { makeGeo, type Geo } from "./data/geo";
-import { loadManifest, loadYear } from "./data/load";
+import { loadManifest, loadSearchIndex, loadYear } from "./data/load";
+import { streetFilter, type StreetFilter } from "./data/search";
 import {
   FLAG_FAMILY,
   FLAG_FIREARM,
@@ -76,6 +77,8 @@ export const groupsOn = signal<boolean[]>(Array(GROUP_COUNT).fill(true));
 export const offenseSel = signal<number[]>([]);
 export const area = signal<{ kind: AreaKind; id: number } | null>(null);
 export const polygon = signal<LngLat[] | null>(null);
+/** Limit to one street, picked in search. */
+export const street = signal<StreetFilter | null>(null);
 export const firearmOnly = signal(false);
 export const familyOnly = signal(false);
 /** UCR Part I offenses only: one switch standing in for a fixed list of serious offenses. */
@@ -132,6 +135,12 @@ export const filters = computed<Filters | null>(() => {
   if (!g) return null;
   const sel = offenseSel.value;
   const poly = polygon.value;
+  const st = street.value;
+  let addresses: Uint8Array | null = null;
+  if (st) {
+    addresses = new Uint8Array(st.ids.reduce((max, id) => Math.max(max, id), 0) + 1);
+    for (const id of st.ids) addresses[id] = 1;
+  }
   return {
     d0: applied.value.d0,
     d1: applied.value.d1,
@@ -139,6 +148,7 @@ export const filters = computed<Filters | null>(() => {
     offenses: sel.length ? new Set(sel) : null,
     area: area.value,
     polygon: poly ? poly.map(([lng, lat]) => [g.x(lng), g.y(lat)] as const) : null,
+    addresses,
     requireFlags:
       (firearmOnly.value ? FLAG_FIREARM : 0) |
       (familyOnly.value ? FLAG_FAMILY : 0) |
@@ -171,6 +181,7 @@ export const activeFilterCount = computed(
     (offenseSel.value.length ? 1 : 0) +
     (area.value ? 1 : 0) +
     (polygon.value ? 1 : 0) +
+    (street.value ? 1 : 0) +
     (firearmOnly.value ? 1 : 0) +
     (familyOnly.value ? 1 : 0) +
     (part1Only.value ? 1 : 0) +
@@ -181,6 +192,7 @@ export function clearFilters() {
   offenseSel.value = [];
   area.value = null;
   polygon.value = null;
+  street.value = null;
   firearmOnly.value = false;
   familyOnly.value = false;
   part1Only.value = false;
@@ -260,6 +272,15 @@ export async function start() {
   const fromUrl = readUrl();
   const valid = fromUrl && Number.isFinite(fromUrl.d0) && Number.isFinite(fromUrl.d1);
   await setRange(valid ? fromUrl : resolvePreset("90d"));
+  // A street in the link needs the search index to turn its name into addresses.
+  const wanted = new URLSearchParams(location.hash.slice(1)).get("s");
+  if (wanted) {
+    try {
+      street.value = streetFilter(await loadSearchIndex(manifest.value), wanted);
+    } catch {
+      // Without the index the link still opens, just without its street filter.
+    }
+  }
   urlReady = true;
 }
 
@@ -322,6 +343,7 @@ effect(() => {
     o: offenseSel.value,
     a: area.value,
     p: polygon.value,
+    s: street.value,
     f: firearmOnly.value,
     fv: familyOnly.value,
     p1: part1Only.value,
@@ -339,6 +361,7 @@ effect(() => {
     q.set("a", `${state.a.kind}:${lists[state.a.kind][state.a.id]}`);
   }
   if (state.p) q.set("p", state.p.map(([x, y]) => `${x.toFixed(5)},${y.toFixed(5)}`).join(";"));
+  if (state.s) q.set("s", state.s.name);
   if (state.f) q.set("f", "1");
   if (state.fv) q.set("fv", "1");
   if (state.p1) q.set("p1", "1");
