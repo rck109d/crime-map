@@ -68,6 +68,10 @@ function ink() {
 /** Add our sources and layers to a freshly loaded basemap style. */
 function install(m: MapLibreMap) {
   const t = THEMES[theme.value];
+  for (const [id, paint] of Object.entries(t.basemapPaint ?? {})) {
+    if (!m.getLayer(id)) continue;
+    for (const [property, value] of Object.entries(paint)) m.setPaintProperty(id, property as never, value as never);
+  }
   // Draw above every road and building but under the labels that end the style,
   // so points are never clipped by basemap shapes and place names stay readable.
   const layers = m.getStyle().layers;

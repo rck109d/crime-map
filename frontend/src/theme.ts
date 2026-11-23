@@ -13,7 +13,46 @@ export interface DataTheme {
   /** Sequential ramp, least to most. */
   ramp: string[];
   basemap: string;
+  /**
+   * Paint values to change in the basemap once it has loaded, by layer id.
+   * A layer the basemap no longer has is skipped.
+   */
+  basemapPaint?: Record<string, Record<string, unknown>>;
 }
+
+/**
+ * The stock dark basemap draws streets and their names barely lighter than the
+ * ground. These lift roads, rail, outlines and labels a few steps so the map
+ * can be read at a glance, while staying well below the brightness of the data.
+ */
+const DARK_LABEL = { "text-color": "#b4b2ad", "text-halo-color": "rgba(0,0,0,0.85)" };
+const DARK_BASEMAP_PAINT: Record<string, Record<string, unknown>> = {
+  water: { "fill-color": "#1c232e" },
+  waterway: { "line-color": "#1c232e" },
+  water_name: { "text-color": "#7f8ea3", "text-halo-color": "rgba(0,0,0,0.7)" },
+  building: { "fill-outline-color": "#2b2b2d" },
+  highway_path: { "line-color": "#38383a" },
+  highway_minor: { "line-color": "#343436" },
+  highway_major_casing: { "line-color": "#5c5c5f" },
+  highway_major_inner: { "line-color": "#3d3d40" },
+  highway_major_subtle: { "line-color": "#454548" },
+  highway_motorway_casing: { "line-color": "#5c5c60" },
+  highway_motorway_inner: { "line-color": "#3c3c40" },
+  highway_motorway_subtle: { "line-color": "#454548" },
+  railway_transit: { "line-color": "#4a4a4d" },
+  railway_minor: { "line-color": "#4a4a4d" },
+  railway: { "line-color": "#4a4a4d" },
+  boundary_state: { "line-color": "#5a5a5d" },
+  highway_name_other: { "text-color": "#a09e99", "text-halo-color": "rgba(0,0,0,0.85)" },
+  highway_name_motorway: { "text-color": "#b4b2ad" },
+  place_other: DARK_LABEL,
+  place_suburb: DARK_LABEL,
+  place_village: DARK_LABEL,
+  place_town: DARK_LABEL,
+  place_city: DARK_LABEL,
+  place_city_large: DARK_LABEL,
+  place_state: DARK_LABEL,
+};
 
 export const THEMES: Record<ThemeName, DataTheme> = {
   light: {
@@ -28,6 +67,7 @@ export const THEMES: Record<ThemeName, DataTheme> = {
     // On a dark surface the anchor flips: more is lighter.
     ramp: ["#104281", "#184f95", "#256abf", "#3987e5", "#6da7ec", "#b7d3f6"],
     basemap: "https://tiles.openfreemap.org/styles/dark",
+    basemapPaint: DARK_BASEMAP_PAINT,
   },
 };
 
