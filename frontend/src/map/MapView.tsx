@@ -41,7 +41,8 @@ setWorkerUrl(workerUrl);
 const ATLANTA: LngLat = [-84.39, 33.765];
 /** Hexagon circumradius on screen, in CSS pixels. */
 const HEX_PIXELS = 15;
-const TAP_PIXELS = 16;
+/** Radius, in CSS pixels, of the circle a tap on the map picks incidents from. */
+const TAP_PIXELS = 48;
 /** Radius of the circle that marks a searched address on the map. */
 const MARKER_METERS = 15;
 /** A place from an outside search has no APD address, so incidents near it are shown instead. */
