@@ -1,6 +1,6 @@
 import type { Signal } from "@preact/signals";
 import { useMemo, useState } from "preact/hooks";
-import { formatRange } from "../data/dates";
+import { formatLong, formatRange } from "../data/dates";
 import {
   activeFilterCount,
   applied,
@@ -118,7 +118,15 @@ function DateDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const max = cal.iso(lastDay.value);
   const fromValue = from || cal.iso(r.d0);
   const toValue = to || cal.iso(r.d1);
-  const valid = fromValue >= min && toValue <= max && fromValue <= toValue;
+  // A typed date can still be out of range, so check as well as constrain.
+  const inData = (v: string) => v.length === 10 && v >= min && v <= max;
+  const valid = inData(fromValue) && inData(toValue) && fromValue <= toValue;
+  const dataSpan = `${formatLong(cal.date(0))} and ${formatLong(cal.date(lastDay.value))}`;
+  const problem = valid
+    ? null
+    : inData(fromValue) && inData(toValue)
+      ? "The end date is before the start date."
+      : `Choose dates between ${dataSpan}; there is no data outside that.`;
   const close = () => {
     setFrom("");
     setTo("");
@@ -161,14 +169,39 @@ function DateDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
         <div class="custom-title">
           Custom range {r.preset === "custom" && <CheckIcon />}
         </div>
+        {/* The pickers offer only days that have data, and no end date before the start. */}
         <label>
           <span>From</span>
-          <input type="date" min={min} max={max} value={fromValue} onInput={(e) => setFrom(e.currentTarget.value)} />
+          <input
+            type="date"
+            min={min}
+            max={max}
+            value={fromValue}
+            aria-invalid={!inData(fromValue)}
+            onInput={(e) => {
+              const v = e.currentTarget.value;
+              setFrom(v);
+              // Moving the start past the end carries the end along with it.
+              if (inData(v) && v > toValue) setTo(v);
+            }}
+          />
         </label>
         <label>
           <span>To</span>
-          <input type="date" min={min} max={max} value={toValue} onInput={(e) => setTo(e.currentTarget.value)} />
+          <input
+            type="date"
+            min={inData(fromValue) ? fromValue : min}
+            max={max}
+            value={toValue}
+            aria-invalid={!inData(toValue) || toValue < fromValue}
+            onInput={(e) => setTo(e.currentTarget.value)}
+          />
         </label>
+        {problem && (
+          <p class="field-error" role="alert">
+            {problem}
+          </p>
+        )}
         <button class="button" type="submit" disabled={!valid}>
           Apply
         </button>
