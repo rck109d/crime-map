@@ -145,13 +145,37 @@ function install(m: MapLibreMap) {
     id: "pick-fill",
     type: "fill",
     source: "pick",
+    filter: ["==", ["geometry-type"], "Polygon"],
     paint: { "fill-color": ink(), "fill-opacity": 0.08 },
   });
   m.addLayer({
     id: "pick-line",
     type: "line",
     source: "pick",
+    filter: ["==", ["geometry-type"], "Polygon"],
     paint: { "line-color": ink(), "line-width": 2.5 },
+  });
+  m.addLayer({
+    id: "pick-circle",
+    type: "circle",
+    source: "pick",
+    filter: ["==", ["geometry-type"], "Point"],
+    paint: {
+      // r0 is the radius in pixels at zoom 0; each zoom level doubles it.
+      "circle-radius": [
+        "interpolate",
+        ["exponential", 2],
+        ["zoom"],
+        0,
+        ["get", "r0"],
+        24,
+        ["*", ["get", "r0"], 2 ** 24],
+      ] as never,
+      "circle-color": ink(),
+      "circle-opacity": 0.08,
+      "circle-stroke-color": ink(),
+      "circle-stroke-width": 2.5,
+    },
   });
   pushAll();
 }
@@ -260,15 +284,22 @@ function pushDraft() {
 
 function pushSelection() {
   const sel = selection.value;
-  setData(
-    "pick",
-    sel
-      ? {
-          type: "FeatureCollection",
-          features: [{ type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [sel.ring] } }],
-        }
-      : empty,
-  );
+  const features: Feature[] = [];
+  if (sel?.ring) {
+    features.push({ type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [sel.ring] } });
+  }
+  if (sel?.circle) {
+    // Drawn by the map as a true circle, so it is smooth at any size. Its
+    // radius is given as pixels at zoom 0; the layer doubles it per zoom level,
+    // which keeps it the same size on the ground as the map zooms.
+    const { center, meters } = sel.circle;
+    features.push({
+      type: "Feature",
+      properties: { r0: meters / metersPerPixel(0, center[1]) },
+      geometry: { type: "Point", coordinates: center },
+    });
+  }
+  setData("pick", { type: "FeatureCollection", features });
 }
 
 function pushPositions() {
@@ -337,12 +368,12 @@ function spotAt(lngLat: LngLat, reach: number): Selection | null {
   const cy = g.y(lngLat[1]);
   const rx = reach / g.mPerX;
   const ry = reach / g.mPerY;
-  const ring: LngLat[] = [];
-  for (let k = 0; k <= 48; k++) {
-    const a = (k / 48) * 2 * Math.PI;
-    ring.push([g.lng(cx + rx * Math.cos(a)), g.lat(cy + ry * Math.sin(a))]);
-  }
-  return { rows: nearby(p, s, cx, cy, rx, ry), kind: "spot", ring, at: lngLat };
+  return {
+    rows: nearby(p, s, cx, cy, rx, ry),
+    kind: "spot",
+    circle: { center: lngLat, meters: reach },
+    at: lngLat,
+  };
 }
 
 /**
