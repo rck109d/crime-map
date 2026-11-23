@@ -34,15 +34,18 @@ def read_points(path):
     assert raw[:2] == b"\x1f\x8b"  # stored gzip-compressed
     body = gzip.decompress(raw)
     magic, version, _, count = struct.unpack_from("<4sHHI", body)
-    assert (magic, version) == (b"CMAP", 1)
-    assert len(body) == 12 + count * 16
+    assert (magic, version) == (b"CMAP", 2)
+    assert len(body) == 12 + count * 19
     cols, offset = {}, 12
-    for name in ("day", "minute", "x", "y", "nhood"):
+    for name in ("day", "minute", "x", "y", "nhood", "addr_lo"):
         col = array("H")
         col.frombytes(body[offset : offset + count * 2])
         cols[name], offset = list(col), offset + count * 2
-    for name in ("offense", "npu", "zone", "flags", "occ_hour", "occ_dow"):
+    for name in ("offense", "npu", "zone", "flags", "occ_hour", "occ_dow", "addr_hi"):
         cols[name], offset = list(body[offset : offset + count]), offset + count
+    cols["address"] = [
+        lo | (hi << 16) for lo, hi in zip(cols["addr_lo"], cols["addr_hi"], strict=True)
+    ]
     return count, cols
 
 
@@ -152,3 +155,81 @@ def test_unclassified_records_get_their_own_group(tmp_path, layer, server, recor
     unclassified = next(o for o in manifest["offenses"] if o["code"] == "NOT_APPL")
     assert unclassified["name"] == "Unclassified"
     assert manifest["groups"][unclassified["group"]] == "Unclassified"
+
+
+def test_search_index_groups_addresses_by_street():
+    from collections import Counter
+
+    from crimemap.search_index import build_search_index, clean_address, number_addresses
+
+    assert clean_address("4305  CROSSWIND RD ") == "4305 CROSSWIND RD"
+    counts = Counter(
+        {
+            "3393 PEACHTREE RD NE": 7,
+            "25 PEACHTREE RD NE": 1,
+            "64 HOGUE ST NE": 3,
+            "PRYOR ST / BASS ST": 4,
+            "N/A": 99,
+            "": 5,
+        }
+    )
+    ids = number_addresses(counts)
+    # Busiest real address first; placeholders share id 0 however common they are.
+    assert ids == {
+        "3393 PEACHTREE RD NE": 1,
+        "PRYOR ST / BASS ST": 2,
+        "64 HOGUE ST NE": 3,
+        "25 PEACHTREE RD NE": 4,
+        "N/A": 0,
+        "": 0,
+    }
+    places = {
+        "3393 PEACHTREE RD NE": (1, 10, 20),
+        "25 PEACHTREE RD NE": (4, 30, 40),
+        "64 HOGUE ST NE": (3, 50, 60),
+        "PRYOR ST / BASS ST": (2, 70, 80),
+    }
+    index = build_search_index(places, counts)
+    assert [s["n"] for s in index["streets"]] == ["PEACHTREE RD NE", "HOGUE ST NE"]
+    peachtree = index["streets"][0]
+    assert peachtree["c"] == 8
+    # number, x, y, incidents, id; sorted by house number
+    assert peachtree["a"] == [25, 30, 40, 1, 4, 3393, 10, 20, 7, 1]
+    assert index["crossings"] == [["PRYOR ST / BASS ST", 70, 80, 4, 2]]
+
+
+def test_rows_carry_their_address_id_and_search_points_at_the_latest_position(
+    tmp_path, layer, server, records
+):
+    # The same address, re-geocoded 100 m away in a later report.
+    first = next(r for r in records if r["IncidentNumber"] == "262755020")
+    moved = dict(
+        records[-1],
+        OBJECTID=900,
+        IncidentNumber="MOVED",
+        StreetAddress=first["StreetAddress"],
+        Longitude=first["Longitude"] + 0.001,
+        Latitude=first["Latitude"],
+    )
+    server.records.append(moved)
+    out = tmp_path / "site"
+    manifest = build_site(archive(tmp_path, layer), out)
+    _, cols = read_points(out / "points-2026.bin")
+    months = manifest["years"][0]["months"]
+    order = [
+        inc
+        for month in months
+        for inc in json.loads((out / "detail" / f"{month['month']}.json").read_text())["inc"]
+    ]
+    old_row, new_row = order.index("262755020"), order.index("MOVED")
+    assert cols["address"][old_row] == cols["address"][new_row] != 0
+    assert cols["x"][old_row] != cols["x"][new_row]
+
+    index = json.loads((out / "search.json").read_text())
+    number, street = first["StreetAddress"].split(" ", 1)
+    entry = next(s for s in index["streets"] if s["n"] == street)
+    at = entry["a"].index(int(number))
+    _, x, y, count, address_id = entry["a"][at : at + 5]
+    assert address_id == cols["address"][new_row]
+    assert count == 2
+    assert (x, y) == (cols["x"][new_row], cols["y"][new_row])  # where it is reported now

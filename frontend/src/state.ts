@@ -28,12 +28,17 @@ export type LngLat = [number, number];
 
 export interface Selection {
   rows: number[];
-  /** "spot": everything within reach of a tap. "cell": one density hexagon. */
-  kind: "spot" | "cell";
+  /** "spot": everything within reach of a tap. "cell": one density hexagon. "address": one searched address. */
+  kind: "spot" | "cell" | "address";
   /** Outline of the area the rows were taken from. */
   ring: LngLat[];
   /** A point inside it, for keeping it in view. */
   at: LngLat;
+  /** For an address: its name and id. */
+  label?: string;
+  address?: number;
+  /** Incidents ever recorded at that address, to explain an empty result. */
+  known?: number;
 }
 
 export const PRESETS: { id: Exclude<Preset, "custom">; label: string }[] = [

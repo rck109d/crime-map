@@ -3,11 +3,12 @@ import { gunzipSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
 import { dateTicks, formatMinute, formatRange, makeCalendar } from "./dates";
 import { toCsv, toKml, type ExportRow } from "./export";
-import { nearby, summarize, visibleBounds, type Filters } from "./filter";
+import { nearby, rowsAtAddress, summarize, visibleBounds, type Filters } from "./filter";
 import { combineYears, decodePoints, isGzip, locate, lowerBoundDay } from "./format";
 import { makeGeo, pointInRing } from "./geo";
 import { binHex, classOf, hexAt, hexBreaks, hexRing, rowsInHex } from "./hexbin";
 import { groupByIncident, incidentRun } from "./incidents";
+import { displayName, searchAreas, searchPlaces, tokenize, type SearchIndex } from "./search";
 import { gaussianSmooth, niceTicks } from "./smooth";
 import {
   FLAG_FAMILY,
@@ -20,7 +21,7 @@ import {
   type PointColumns,
 } from "./types";
 
-/** rows: [day, x, y, offense, nhood, npu, zone, flags, occHour, occDow] */
+/** rows: [day, x, y, offense, nhood, npu, zone, flags, occHour, occDow, address id (optional)] */
 function table(rows: number[][]): PointColumns {
   const n = rows.length;
   const col = (k: number) => rows.map((r) => r[k]);
@@ -37,21 +38,23 @@ function table(rows: number[][]): PointColumns {
     flags: Uint8Array.from(col(7)),
     occHour: Uint8Array.from(col(8)),
     occDow: Uint8Array.from(col(9)),
+    addrLo: Uint16Array.from(col(10).map((id) => (id ?? 0) & 0xffff)),
+    addrHi: Uint8Array.from(col(10).map((id) => (id ?? 0) >> 16)),
   };
 }
 
 function encode(cols: PointColumns): ArrayBuffer {
   const n = cols.count;
-  const buf = new ArrayBuffer(12 + n * 16);
+  const buf = new ArrayBuffer(12 + n * 19);
   const view = new DataView(buf);
   [0x43, 0x4d, 0x41, 0x50].forEach((b, i) => view.setUint8(i, b));
-  view.setUint16(4, 1, true);
+  view.setUint16(4, 2, true);
   view.setUint32(8, n, true);
   let o = 12;
-  for (const c of [cols.day, cols.minute, cols.x, cols.y, cols.nhood]) {
+  for (const c of [cols.day, cols.minute, cols.x, cols.y, cols.nhood, cols.addrLo]) {
     for (let i = 0; i < n; i++, o += 2) view.setUint16(o, c[i], true);
   }
-  for (const c of [cols.offense, cols.npu, cols.zone, cols.flags, cols.occHour, cols.occDow]) {
+  for (const c of [cols.offense, cols.npu, cols.zone, cols.flags, cols.occHour, cols.occDow, cols.addrHi]) {
     for (let i = 0; i < n; i++, o++) view.setUint8(o, c[i]);
   }
   return buf;
@@ -82,13 +85,13 @@ const manifest: Manifest = {
   ],
 };
 const y2021 = table([
-  [0, 100, 100, 0, 1, 1, 1, 3, 13, 5],
-  [0, 100, 100, 1, 1, 1, 1, 4, 0, 5],
+  [0, 100, 100, 0, 1, 1, 1, 3, 13, 5, 70000],
+  [0, 100, 100, 1, 1, 1, 1, 4, 0, 5, 7],
   [3, 5000, 5000, 1, 2, 2, 1, 4, UNKNOWN, UNKNOWN],
   [40, NO_COORD, NO_COORD, 2, 0, 0, 0, 0, 9, 1],
 ]);
 const y2022 = table([
-  [366, 120, 110, 0, 1, 1, 1, 0, 22, 0],
+  [366, 120, 110, 0, 1, 1, 1, 0, 22, 0, 70000],
   [367, 9000, 9000, 1, 2, 2, 1, 5, 23, 0],
 ]);
 const sizes = { offenses: 3, nhoods: 3, npus: 3, zones: 2 };
@@ -121,6 +124,7 @@ describe("points format", () => {
     expect(points.count).toBe(6);
     expect([...points.day]).toEqual([0, 0, 3, 40, 366, 367]);
     expect([...points.group]).toEqual([0, 1, 1, 3, 0, 1]);
+    expect([...points.address]).toEqual([70000, 7, 0, 0, 70000, 0]); // ids above 65,535 survive
     expect(locate(points, 2)).toEqual({ month: "2021-01", row: 2 });
     expect(locate(points, 3)).toEqual({ month: "2021-02", row: 0 });
     expect(locate(points, 5)).toEqual({ month: "2022-01", row: 1 });
@@ -200,6 +204,15 @@ describe("summarize", () => {
     const drawn = summarize(points, { ...all, polygon: ring }, sizes);
     expect(drawn.total).toBe(3); // the unmapped row can never be inside
     expect(visibleBounds(points, drawn)).toEqual({ minX: 100, maxX: 120, minY: 100, maxY: 110 });
+  });
+
+  it("gathers an address's rows by id, wherever they are mapped, newest first", () => {
+    const s = summarize(points, all, sizes);
+    expect(rowsAtAddress(points, s, 70000)).toEqual([4, 0]); // rows 0 and 4 sit at different positions
+    expect(rowsAtAddress(points, s, 7)).toEqual([1]);
+    expect(rowsAtAddress(points, s, 0)).toEqual([]); // 0 means no address, never a match
+    const recent = summarize(points, { ...all, d0: 300 }, sizes);
+    expect(rowsAtAddress(points, recent, 70000)).toEqual([4]);
   });
 
   it("finds rows near a tap, nearest spot first and newest first within it", () => {
@@ -353,5 +366,72 @@ describe("calendar", () => {
     const twoYears = dateTicks(cal.dayOf("2025-01-01"), 690, cal, 5);
     expect(twoYears.map((t) => t.label)).toEqual(["Jan ’25", "Jul", "Jan ’26", "Jul"]);
     for (const set of [week, quarter, years, twoYears]) expect(set.length).toBeLessThanOrEqual(5);
+  });
+});
+
+describe("search", () => {
+  const index: SearchIndex = {
+    streets: [
+      { n: "PEACHTREE RD NE", c: 50, a: [25, 10, 10, 1, 4, 3393, 20, 30, 40, 1, 3395, 21, 31, 9, 3] },
+      { n: "PEACHTREE ST NE", c: 30, a: [1052, 40, 50, 30, 2] },
+      { n: "10TH ST NE", c: 12, a: [33, 60, 70, 12, 5] },
+      { n: "W PEACHTREE ST NW", c: 8, a: [339, 80, 90, 8, 6] },
+    ],
+    crossings: [
+      ["PEACHTREE ST NE / 10TH ST NE", 45, 55, 6, 7],
+      ["PRYOR ST / BASS ST", 5, 5, 2, 8],
+    ],
+  };
+  const areas = { nhoods: ["", "Midtown", "Peachtree Hills", "Downtown"], npus: ["", "E", "M"], zones: ["", "Zone 5"] };
+
+  it("tokenizes with abbreviations and without filler", () => {
+    expect(tokenize(" 3393  Peachtree Road, northeast ")).toEqual(["3393", "PEACHTREE", "RD", "NE"]);
+    expect(tokenize("peachtree & 10th")).toEqual(["PEACHTREE", "10TH"]);
+    expect(tokenize("   ")).toEqual([]);
+  });
+
+  it("finds streets by word prefixes, names that start with the query first", () => {
+    const { streets } = searchPlaces(index, "peach");
+    expect(streets.map((h) => h.label)).toEqual(["PEACHTREE RD NE", "PEACHTREE ST NE", "W PEACHTREE ST NW"]);
+    expect(searchPlaces(index, "peachtree street").streets.map((h) => h.label)).toEqual([
+      "PEACHTREE ST NE",
+      "W PEACHTREE ST NW",
+    ]);
+    const road = streets[0];
+    expect(road.kind === "street" && road.box).toEqual([10, 10, 21, 31]);
+  });
+
+  it("finds an address by house number, exact matches first", () => {
+    const { addresses } = searchPlaces(index, "3393 peachtree");
+    expect(addresses[0]).toEqual({ kind: "address", label: "3393 PEACHTREE RD NE", count: 40, x: 20, y: 30, id: 1 });
+    // A partial number still finds candidates, busiest first.
+    expect(searchPlaces(index, "339 peachtree").addresses.map((h) => h.label)).toEqual([
+      "339 W PEACHTREE ST NW",
+      "3393 PEACHTREE RD NE",
+      "3395 PEACHTREE RD NE",
+    ]);
+    expect(searchPlaces(index, "9999 peachtree").addresses).toEqual([]);
+  });
+
+  it("finds numbered streets and intersections", () => {
+    expect(searchPlaces(index, "10th").streets.map((h) => h.label)).toEqual(["10TH ST NE"]);
+    expect(searchPlaces(index, "peachtree and 10th").crossings.map((h) => h.label)).toEqual([
+      "PEACHTREE ST NE / 10TH ST NE",
+    ]);
+    expect(searchPlaces(index, "1")).toEqual({ addresses: [], streets: [], crossings: [] });
+  });
+
+  it("finds neighborhoods, zones and NPUs", () => {
+    expect(searchAreas(areas, "peach").map((h) => h.label)).toEqual(["Peachtree Hills"]);
+    expect(searchAreas(areas, "town").map((h) => h.label)).toEqual([]); // word prefixes, not substrings
+    expect(searchAreas(areas, "zone 5")[0]).toMatchObject({ areaKind: "zone", id: 1, label: "Zone 5" });
+    expect(searchAreas(areas, "npu m")[0]).toMatchObject({ areaKind: "npu", id: 2, label: "NPU M" });
+    expect(searchAreas(areas, "")).toEqual([]);
+  });
+
+  it("writes street names in mixed case", () => {
+    expect(displayName("PEACHTREE ST NE / 10TH ST NE")).toBe("Peachtree St NE / 10th St NE");
+    expect(displayName("3393 PEACHTREE RD NE")).toBe("3393 Peachtree Rd NE");
+    expect(displayName("I-75 NB EXPY NW")).toBe("I-75 NB Expy NW");
   });
 });

@@ -6,6 +6,7 @@ here from the CSV archive:
     manifest.json        dictionaries, per-month row counts, coverage dates
     points-YYYY.bin      one compact, gzip-compressed table per year
     detail/YYYY-MM.json  per-month text fields, fetched when an incident is opened
+    search.json          streets, addresses and intersections, for the map's search
 
 Row N of a month is the same incident in the points table and the detail file.
 Nothing written here is committed; it is rebuilt from data/ on every deploy.
@@ -19,12 +20,14 @@ import json
 import struct
 import sys
 from array import array
+from collections import Counter
 from datetime import date, datetime
 from pathlib import Path
 
+from .search_index import build_search_index, clean_address, number_addresses
 from .store import read_csv
 
-FORMAT_VERSION = 1
+FORMAT_VERSION = 2
 MAGIC = b"CMAP"
 
 # The source's coverage starts in 2021; the few earlier report dates in the
@@ -136,7 +139,22 @@ def build_site(data_dir: Path, out_dir: Path) -> dict:
     for stale in [*out_dir.glob("points-*.bin"), *(out_dir / "detail").glob("*.json")]:
         stale.unlink()
 
+    # Every row carries the id of its address, so the browser can gather the
+    # incidents at an address exactly. Map positions cannot do that: APD has
+    # re-geocoded addresses over time, so one address has several positions.
+    # Ids are handed out busiest first, which needs a first pass over the data.
+    address_counts: Counter[str] = Counter()
+    for path in month_files:
+        for row in read_csv(path)[1]:
+            if local_parts(row.get("ReportDate", "")) is not None:
+                address_counts[clean_address(row.get("StreetAddress", ""))] += 1
+    address_ids = number_addresses(address_counts)
+    if len(address_ids) >= 1 << 24:
+        raise SystemExit("address ids outgrew their 24-bit column; widen the format")
+
     years: dict[int, dict] = {}
+    # address -> (id, x, y) at its most recently reported position (for search)
+    places: dict[str, tuple[int, int, int]] = {}
     total = unmapped = 0
     last_report: datetime | None = None
     digest = hashlib.sha256()
@@ -146,8 +164,8 @@ def build_site(data_dir: Path, out_dir: Path) -> dict:
         by_year.setdefault(int(path.parent.name), []).append(path)
 
     for year, paths in by_year.items():
-        day, minute, xs, ys, nhood = (array("H") for _ in range(5))
-        offense, npu, zone, flags, occ_hour, occ_dow = (array("B") for _ in range(6))
+        day, minute, xs, ys, nhood, addr_lo = (array("H") for _ in range(6))
+        offense, npu, zone, flags, occ_hour, occ_dow, addr_hi = (array("B") for _ in range(7))
         months = []
         for path in paths:
             _, rows = read_csv(path)
@@ -166,9 +184,17 @@ def build_site(data_dir: Path, out_dir: Path) -> dict:
 
                 x = quantize(row.get("Longitude", ""), BBOX["west"], BBOX["east"])
                 y = quantize(row.get("Latitude", ""), BBOX["south"], BBOX["north"])
+                address = clean_address(row.get("StreetAddress", ""))
+                address_id = address_ids[address]
+                # 24 bits, split across a 16-bit and an 8-bit column.
+                addr_lo.append(address_id & 0xFFFF)
+                addr_hi.append(address_id >> 16)
                 if x is None or y is None:
                     x = y = NO_COORD
                     unmapped += 1
+                elif address_id:
+                    # Rows arrive oldest first, so the last position kept is the current one.
+                    places[address] = (address_id, x, y)
                 xs.append(x)
                 ys.append(y)
 
@@ -238,8 +264,8 @@ def build_site(data_dir: Path, out_dir: Path) -> dict:
         if len(nhoods.ids) > 65535:
             raise SystemExit("neighborhood dictionary outgrew its 16-bit column")
         blob = encode_points(
-            [day, minute, xs, ys, nhood],
-            [offense, npu, zone, flags, occ_hour, occ_dow],
+            [day, minute, xs, ys, nhood, addr_lo],
+            [offense, npu, zone, flags, occ_hour, occ_dow, addr_hi],
             count,
         )
         (out_dir / f"points-{year}.bin").write_bytes(blob)
@@ -248,6 +274,12 @@ def build_site(data_dir: Path, out_dir: Path) -> dict:
         total += count
 
     assert last_report is not None
+    search_text = json.dumps(
+        build_search_index(places, address_counts), separators=(",", ":"), ensure_ascii=False
+    )
+    (out_dir / "search.json").write_text(search_text, encoding="utf-8")
+    digest.update(search_text.encode("utf-8"))
+
     manifest = {
         "version": FORMAT_VERSION,
         # Content hash: lets the browser cache data files until they change.

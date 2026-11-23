@@ -61,6 +61,9 @@ export interface PointColumns {
   occHour: Uint8Array;
   /** Day of week the offense began (0 = Sunday), or UNKNOWN. */
   occDow: Uint8Array;
+  /** Low 16 and high 8 bits of the address id. */
+  addrLo: Uint16Array;
+  addrHi: Uint8Array;
 }
 
 /** Where a run of rows came from, for looking up its detail file. */
@@ -73,6 +76,11 @@ export interface Segment {
 export interface Points extends PointColumns {
   /** Colour group per row, derived from the offense. */
   group: Uint8Array;
+  /**
+   * Id of the row's street address; 0 when APD recorded none. Rows at one
+   * address share an id even when APD has mapped it to different positions.
+   */
+  address: Uint32Array;
   segments: Segment[];
   /** Years present, ascending. */
   years: number[];

@@ -22,6 +22,7 @@ import { fmt, fmtCompact } from "./ui/format";
 import { MenuIcon } from "./ui/icons";
 import { MapTools } from "./ui/MapTools";
 import { Overview } from "./ui/Overview";
+import { Search } from "./ui/Search";
 import { SelectionHeader, SelectionList } from "./ui/SelectionList";
 import { Sheet, sheetSnap, WIDE } from "./ui/Sheet";
 import { TrendChart } from "./ui/TrendChart";
@@ -118,9 +119,12 @@ export function App() {
         <header class="topbar" ref={topRef}>
           <div class="title-row">
             <h1>Atlanta Crime Map</h1>
-            <button class="icon-button" onClick={() => setAbout(true)} aria-label="About this map, appearance and export">
-              <MenuIcon />
-            </button>
+            <div class="title-actions">
+              <Search />
+              <button class="icon-button" onClick={() => setAbout(true)} aria-label="About this map, appearance and export">
+                <MenuIcon />
+              </button>
+            </div>
           </div>
           <FilterBar />
           {busy.value && <div class="progress" role="progressbar" aria-label="Loading incidents" />}

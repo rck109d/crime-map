@@ -13,7 +13,7 @@ import {
 import "maplibre-gl/dist/maplibre-gl.css";
 import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?url";
 import { useEffect, useRef } from "preact/hooks";
-import { nearby, visibleBounds } from "../data/filter";
+import { nearby, rowsAtAddress, visibleBounds } from "../data/filter";
 import { mercatorX, mercatorY, metersPerPixel } from "../data/geo";
 import { binHex, classOf, hexAt, hexBreaks, hexRing, rowsInHex } from "../data/hexbin";
 import { NO_COORD } from "../data/types";
@@ -28,6 +28,7 @@ import {
   summary,
   theme,
   type LngLat,
+  type Selection,
 } from "../state";
 import { THEMES } from "../theme";
 import { PointsLayer } from "./pointsLayer";
@@ -38,6 +39,8 @@ const ATLANTA: LngLat = [-84.39, 33.765];
 /** Hexagon circumradius on screen, in CSS pixels. */
 const HEX_PIXELS = 15;
 const TAP_PIXELS = 16;
+/** Radius of the circle that marks a searched address on the map. */
+const MARKER_METERS = 15;
 
 /** Legend data for the density layer. */
 export const hexLegend = signal<{ breaks: number[]; radius: number } | null>(null);
@@ -261,20 +264,26 @@ function onClick(e: MapMouseEvent) {
     return;
   }
   // Everything within a fingertip of the tap; the outline shows exactly what was included.
-  const reach = TAP_PIXELS * metersPerPixel(map.getZoom(), e.lngLat.lat);
+  const picked = spotAt(lngLat, TAP_PIXELS * metersPerPixel(map.getZoom(), e.lngLat.lat));
+  selection.value = picked && picked.rows.length ? picked : null;
+}
+
+/** The visible incidents within `reach` metres of a position, with the circle that bounds them. */
+function spotAt(lngLat: LngLat, reach: number): Selection | null {
+  const p = points.value;
+  const s = summary.value;
+  const g = geo.value;
+  if (!p || !s || !g) return null;
+  const cx = g.x(lngLat[0]);
+  const cy = g.y(lngLat[1]);
   const rx = reach / g.mPerX;
   const ry = reach / g.mPerY;
-  const rows = nearby(p, s, cx, cy, rx, ry);
-  if (rows.length === 0) {
-    selection.value = null;
-    return;
-  }
   const ring: LngLat[] = [];
   for (let k = 0; k <= 48; k++) {
     const a = (k / 48) * 2 * Math.PI;
     ring.push([g.lng(cx + rx * Math.cos(a)), g.lat(cy + ry * Math.sin(a))]);
   }
-  selection.value = { rows, kind: "spot", ring, at: lngLat };
+  return { rows: nearby(p, s, cx, cy, rx, ry), kind: "spot", ring, at: lngLat };
 }
 
 function padding() {
@@ -300,6 +309,40 @@ export const mapApi = {
   },
   resetView() {
     map?.easeTo({ center: ATLANTA, zoom: 10.4, bearing: 0, pitch: 0, duration: 600 });
+  },
+  /** Frame a box given by its corners, e.g. the extent of a street. */
+  fitBox(west: number, south: number, east: number, north: number) {
+    map?.fitBounds(
+      [
+        [west, south],
+        [east, north],
+      ],
+      { padding: padding(), maxZoom: 16.5, duration: 600 },
+    );
+  },
+  /**
+   * Go to an address found by search and open what is recorded there. The
+   * address is selected even when nothing matches the current filters, so the
+   * panel can say so instead of leaving the map looking empty.
+   */
+  showAddress(at: LngLat, address: number, label: string, known: number) {
+    const p = points.value;
+    const s = summary.value;
+    if (!map || !p || !s) return;
+    // The circle only marks the spot; the incidents are matched by address,
+    // because older reports of the same address can be mapped elsewhere.
+    const marker = spotAt(at, MARKER_METERS);
+    if (!marker) return;
+    selection.value = { ...marker, kind: "address", rows: rowsAtAddress(p, s, address), address, label, known };
+    const i = mapInsets.value;
+    // On a phone the panel is about to rise to half height; aim above that.
+    const bottom = i.bottom > 0 ? Math.max(i.bottom, innerHeight * 0.56) : 0;
+    map.easeTo({
+      center: at,
+      zoom: Math.max(map.getZoom(), 16.5),
+      padding: { top: i.top, bottom, left: i.left, right: i.right },
+      duration: 600,
+    });
   },
   /** Keep a picked spot clear of the bottom sheet. */
   reveal(at: LngLat) {

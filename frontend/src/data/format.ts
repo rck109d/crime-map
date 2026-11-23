@@ -2,8 +2,9 @@ import type { Manifest, PointColumns, Points, Segment, YearInfo } from "./types"
 
 const MAGIC = [0x43, 0x4d, 0x41, 0x50]; // "CMAP"
 const HEADER_BYTES = 12;
-const U16_COLUMNS = ["day", "minute", "x", "y", "nhood"] as const;
-const U8_COLUMNS = ["offense", "npu", "zone", "flags", "occHour", "occDow"] as const;
+const U16_COLUMNS = ["day", "minute", "x", "y", "nhood", "addrLo"] as const;
+const U8_COLUMNS = ["offense", "npu", "zone", "flags", "occHour", "occDow", "addrHi"] as const;
+const FORMAT_VERSION = 2;
 
 /** Decode one (already decompressed) points-YYYY.bin file. */
 export function decodePoints(buffer: ArrayBuffer): PointColumns {
@@ -13,7 +14,10 @@ export function decodePoints(buffer: ArrayBuffer): PointColumns {
   }
   const view = new DataView(buffer);
   const version = view.getUint16(4, true);
-  if (version !== 1) throw new Error(`unsupported points format version ${version}`);
+  if (version !== FORMAT_VERSION) {
+    // Most likely an older copy of this page reading newer data: reloading fixes it.
+    throw new Error(`The map data is newer than this page (format ${version}). Reload to update.`);
+  }
   const count = view.getUint32(8, true);
   const expected = HEADER_BYTES + count * (U16_COLUMNS.length * 2 + U8_COLUMNS.length);
   if (bytes.length !== expected) {
@@ -83,8 +87,14 @@ export function combineYears(
   const groupOf = Uint8Array.from(manifest.offenses, (o) => o.group);
   const group = new Uint8Array(count);
   const offense = out.offense;
-  for (let i = 0; i < count; i++) group[i] = groupOf[offense[i]];
+  // The address id is stored split across a 16-bit and an 8-bit column.
+  const address = new Uint32Array(count);
+  for (let i = 0; i < count; i++) {
+    group[i] = groupOf[offense[i]];
+    address[i] = out.addrLo[i] | (out.addrHi[i] << 16);
+  }
   out.group = group;
+  out.address = address;
   return out;
 }
 

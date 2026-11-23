@@ -5,7 +5,18 @@ import { locate } from "../data/format";
 import { groupByIncident } from "../data/incidents";
 import { loadDetail } from "../data/load";
 import { FLAG_FAMILY, FLAG_FIREARM, type MonthDetail } from "../data/types";
-import { calendar, manifest, points, selection, summary, theme } from "../state";
+import { mapApi } from "../map/MapView";
+import {
+  calendar,
+  clearFilters,
+  manifest,
+  points,
+  resolvePreset,
+  selection,
+  setRange,
+  summary,
+  theme,
+} from "../state";
 import { THEMES } from "../theme";
 import { fmt, plural } from "./format";
 import { BackIcon } from "./icons";
@@ -29,14 +40,20 @@ export function SelectionHeader() {
   if (!sel || !p) return null;
   const count = groupByIncident(p.flags, sel.rows).length;
   const title =
-    (sel.rows.length >= ROW_LIMIT ? `${fmt(count)}+ incidents` : plural(count, "incident")) +
-    (sel.kind === "cell" ? " in this cell" : count > 1 ? " here" : "");
+    count === 0
+      ? "Nothing here matches"
+      : (sel.rows.length >= ROW_LIMIT ? `${fmt(count)}+ incidents` : plural(count, "incident")) +
+        (sel.kind === "cell" ? " in this cell" : sel.kind === "address" ? " at this address" : count > 1 ? " here" : "");
   return (
     <div class="selection-head">
       <button class="icon-button" onClick={() => (selection.value = null)} aria-label="Back to summary">
         <BackIcon />
       </button>
-      <h3>{title}</h3>
+      <div>
+        <h3>{title}</h3>
+        {/* The address, when this spot was reached by searching for one. */}
+        {sel.label && <p class="selection-sub">{sel.label}</p>}
+      </div>
     </div>
   );
 }
@@ -87,6 +104,23 @@ export function SelectionList() {
   return (
     <div class="selection">
       {failed && <p class="empty">Could not load the details for these incidents. Check your connection and tap the map again.</p>}
+      {incidents.length === 0 && (
+        <div class="empty-spot">
+          <p>No incidents at this address match your date range and filters.</p>
+          {sel.known ? <p class="fine">{plural(sel.known, "incident")} reported here since 2021.</p> : null}
+          <button
+            class="button"
+            onClick={async () => {
+              const { at, address = 0, label = "", known = 0 } = sel;
+              await setRange(resolvePreset("all"));
+              clearFilters();
+              mapApi.showAddress(at, address, label, known);
+            }}
+          >
+            Show all dates, without filters
+          </button>
+        </div>
+      )}
       <ul class="incidents">
         {shown.map((run, k) => {
           const w = where[k];

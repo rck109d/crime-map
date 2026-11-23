@@ -11,6 +11,8 @@ long-term archive behind it.
   violence, neighborhood / NPU / police zone, or an area you draw on the map
 - Daily trend lines with adjustable smoothing, a time-of-week grid, and
   rankings by offense and area
+- Search for a street, an address, an intersection or a neighborhood; the
+  index is built from the archive, so nothing typed leaves the browser
 - Tap any spot for the incidents there; download the filtered set as CSV or KML
 - Every view has a shareable URL
 
@@ -28,7 +30,7 @@ APD open data (ArcGIS)
 data/nibrs/YYYY/YYYY-MM.csv    committed: the source of truth
    │  crimemap build-site      on every deploy
    ▼
-manifest.json, points-YYYY.bin, detail/YYYY-MM.json    not committed
+manifest.json, points-YYYY.bin, detail/YYYY-MM.json, search.json    not committed
    │
    ▼
 frontend/ (TypeScript, Preact, MapLibre)  →  GitHub Pages

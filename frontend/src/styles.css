@@ -840,6 +840,24 @@ tbody tr:last-child > * {
   font-size: 16px;
   font-weight: 650;
 }
+.selection-sub {
+  color: var(--ink-2);
+  font-size: 13.5px;
+  padding-bottom: 6px;
+}
+.empty-spot {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 0 14px;
+}
+.empty-spot .fine {
+  margin: 0;
+}
+.title-actions {
+  display: flex;
+}
 .incidents {
   display: flex;
   flex-direction: column;
@@ -954,6 +972,51 @@ tbody tr:last-child > * {
     transform: translateY(24px);
     opacity: 0;
   }
+}
+/* Search opens from the top, so a phone's keyboard does not cover the results. */
+.dialog-top {
+  margin: 0 auto auto;
+  border-radius: 0 0 18px 18px;
+  max-height: min(70dvh, 560px);
+}
+.dialog-top[open] {
+  animation-name: drop;
+}
+@keyframes drop {
+  from {
+    transform: translateY(-24px);
+    opacity: 0;
+  }
+}
+.search-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: calc(env(safe-area-inset-top) + 8px) 8px 8px 16px;
+  border-bottom: 1px solid var(--grid);
+  color: var(--ink-2);
+}
+.search-bar input {
+  flex: 1;
+  min-width: 0;
+  min-height: 42px;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--ink);
+  font-size: 17px; /* below 16px iOS zooms the page on focus */
+}
+.search-bar input::-webkit-search-cancel-button {
+  display: none;
+}
+.search-results {
+  padding-top: 6px;
+}
+.search-results .row-note {
+  text-align: right;
+  white-space: normal;
+  flex: none;
+  max-width: 46%;
 }
 .dialog-body {
   display: flex;
@@ -1226,6 +1289,11 @@ tbody tr:last-child > * {
     width: 440px;
     border-radius: 16px;
     max-height: min(680px, 100dvh - 60px);
+  }
+  .dialog-top {
+    margin: 60px auto auto;
+    width: 520px;
+    border-radius: 16px;
   }
 }
 

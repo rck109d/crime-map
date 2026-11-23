@@ -150,6 +150,19 @@ export function visibleBounds(points: Points, s: Summary) {
   return minX === Infinity ? null : { minX, maxX, minY, maxY };
 }
 
+/**
+ * Visible rows recorded at one address, newest first. Matching on the address
+ * id rather than position finds them wherever APD's geocoding put them.
+ */
+export function rowsAtAddress(points: Points, s: Summary, address: number, limit = 500): number[] {
+  const out: number[] = [];
+  if (address === 0) return out;
+  for (let i = s.i1 - 1; i >= s.i0 && out.length < limit; i--) {
+    if (s.style[i] !== HIDDEN && points.address[i] === address) out.push(i);
+  }
+  return out;
+}
+
 /** Visible rows within `radius` (quantized units, per axis scale) of a position, nearest first. */
 export function nearby(
   points: Points,

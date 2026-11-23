@@ -39,6 +39,12 @@ export const CheckIcon = ({ size = 16 }: { size?: number }) => (
     <path d="m5 12 5 5 9-10" stroke-width="2.6" />
   </Icon>
 );
+export const SearchIcon = () => (
+  <Icon>
+    <circle cx="11" cy="11" r="6.5" />
+    <path d="m16 16 4.5 4.5" />
+  </Icon>
+);
 export const MenuIcon = () => (
   <Icon>
     <circle cx="12" cy="12" r="9" />

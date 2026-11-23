@@ -1,4 +1,5 @@
 import { decodePoints, isGzip } from "./format";
+import type { SearchIndex } from "./search";
 import type { Manifest, MonthDetail, PointColumns } from "./types";
 
 const DATA_URL = `${import.meta.env.BASE_URL}data/`;
@@ -36,4 +37,15 @@ export function loadDetail(manifest: Manifest, month: string): Promise<MonthDeta
     details.set(month, pending);
   }
   return pending;
+}
+
+let searchIndex: Promise<SearchIndex> | null = null;
+
+/** The street and address index; about half a megabyte, fetched the first time search is used. */
+export function loadSearchIndex(manifest: Manifest): Promise<SearchIndex> {
+  if (!searchIndex) {
+    searchIndex = get(`search.json?v=${manifest.build}`).then((r) => r.json());
+    searchIndex.catch(() => (searchIndex = null));
+  }
+  return searchIndex;
 }
