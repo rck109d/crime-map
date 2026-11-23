@@ -15,7 +15,8 @@ long-term archive behind it.
 - Every view has a shareable URL
 
 The data lives in [`data/`](data/) as plain monthly CSV files, refreshed from
-APD's open data portal every day; see [`data/SCHEMA.md`](data/SCHEMA.md) for
+APD's open data portal every day. Rows APD later edits or removes are kept in
+a separate change log, so its revisions can be studied; see [`data/SCHEMA.md`](data/SCHEMA.md) for
 layout, columns and caveats.
 
 ## How it fits together
@@ -40,7 +41,8 @@ addresses is fetched a month at a time, only when an incident is opened.
 
 | Path | What |
 |---|---|
-| `data/` | The archive (committed) |
+| `data/nibrs/` | The archive: APD's data as it currently stands (committed) |
+| `data/nibrs-changes/` | Change log: rows APD removed, and earlier versions of rows it edited |
 | `backend/` | Python: `crimemap load` (archive) and `crimemap build-site` (site data) |
 | `frontend/` | The web app |
 | `.github/workflows/update-data.yml` | Daily refresh that commits new data |

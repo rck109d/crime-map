@@ -69,14 +69,20 @@ class Archive:
         """Source field order first; keep any retired columns at the end."""
         self.columns = source_columns + [c for c in self.columns if c not in source_columns]
 
-    def replace_all(self, fresh: list[Row], now: datetime) -> None:
+    def replace_all(self, fresh: list[Row], now: datetime) -> list[Row]:
+        """Make the archive exactly `fresh`; returns the rows it held before."""
+        previous = self.all_rows()
+        self._fill(fresh, now)
+        return previous
+
+    def _fill(self, rows: list[Row], now: datetime) -> None:
         self.partitions = {}
-        for row in fresh:
+        for row in rows:
             self.partitions.setdefault(partition_for(row, now), []).append(row)
 
     def replace_window(
         self, fresh: list[Row], start: datetime, end: datetime, now: datetime
-    ) -> None:
+    ) -> list[Row]:
         """Make the archive match `fresh` for report dates in [start, end).
 
         Archived rows in the window are replaced, since the source removes
@@ -84,14 +90,16 @@ class Archive:
         never touched: incident numbers are occasionally reused, so a matching
         key elsewhere is not proof of a stale copy, and older history should
         only change through an explicit full reload.
+
+        Returns the archived rows that were in the window, i.e. the ones
+        `fresh` replaced.
         """
-        kept = []
+        kept, dropped = [], []
         for row in self.all_rows():
             dt = report_datetime(row)
-            if dt is not None and start <= dt < end:
-                continue
-            kept.append(row)
-        self.replace_all(kept + fresh, now)
+            (dropped if dt is not None and start <= dt < end else kept).append(row)
+        self._fill(kept + fresh, now)
+        return dropped
 
     def rows_in_window(self, start: datetime, end: datetime) -> int:
         n = 0

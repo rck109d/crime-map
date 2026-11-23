@@ -10,6 +10,7 @@ from collections.abc import Callable
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
 
+from . import changes as changelog
 from .arcgis import DEFAULT_LAYER_URL, ArcGISError, Layer, range_where, utc_literal
 from .records import ATLANTA, SANE_EARLIEST, normalize
 from .site import build_site
@@ -191,11 +192,18 @@ def load(
     print(f"Fetched {len(fresh)} records (archive had {before} in that range)", file=sys.stderr)
 
     source_columns = [f["name"] for f in layer.fields if f["name"] != layer.oid_field]
+    old_columns = list(archive.columns)
     archive.set_columns(source_columns)
     if args.all:
-        archive.replace_all(fresh, now)
+        replaced = archive.replace_all(fresh, now)
     else:
-        archive.replace_window(fresh, start, end, now)
+        replaced = archive.replace_window(fresh, start, end, now)
+    # Before the archive is rewritten, keep every row APD removed or edited.
+    # The log is written first: after a crash a re-run may log a row twice,
+    # which is recoverable, but it can never lose one.
+    shared_columns = [c for c in old_columns if c in source_columns]
+    entries = changelog.diff_rows(replaced, fresh, shared_columns)
+    logged = changelog.append_changes(args.data_dir / changelog.DATASET, entries, old_columns, now)
     changes = archive.save()
     write_source_snapshot(dataset_dir, layer.url, layer.fields)
 
@@ -204,7 +212,14 @@ def load(
     summary = (
         f"Refresh NIBRS incidents, {label}: {len(changes)} files changed, +{added} -{removed} rows"
     )
+    kinds: dict[str, int] = {}
+    for kind, _, _ in entries:
+        kinds[kind] = kinds.get(kind, 0) + 1
+    if logged:
+        summary += f"; {logged} prior versions logged"
     print(summary)
+    for kind, n in sorted(kinds.items()):
+        print(f"  logged {kind}: {n}")
     for part, (a, r) in sorted(changes.items()):
         print(f"  {part}: +{a} -{r}")
     if args.summary_file:
@@ -215,6 +230,10 @@ def load(
             fh.write(f"### {summary}\n\n| File | Added | Removed |\n|---|---|---|\n")
             for part, (a, r) in sorted(changes.items()):
                 fh.write(f"| {part} | {a} | {r} |\n")
+            if kinds:
+                fh.write("\n| Logged to nibrs-changes | Rows |\n|---|---|\n")
+                for kind, n in sorted(kinds.items()):
+                    fh.write(f"| {kind} | {n} |\n")
     return 0
 
 
