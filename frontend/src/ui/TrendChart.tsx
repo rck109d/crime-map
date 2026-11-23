@@ -3,7 +3,7 @@ import { dateTicks, formatLong, formatMonth, formatShort, type Calendar } from "
 import { gaussianSmooth, niceTicks } from "../data/smooth";
 import { GROUP_COUNT } from "../data/types";
 import { applied, calendar, groupsOn, smoothing, smoothingRadius, summary, theme } from "../state";
-import { GROUP_LABELS, THEMES } from "../theme";
+import { GROUP_LABELS, GROUP_ORDER, THEMES } from "../theme";
 import { fmt, fmt1, fmtCompact } from "./format";
 import { useWidth } from "./hooks";
 import { ChartIcon, TableIcon } from "./icons";
@@ -39,7 +39,8 @@ export function TrendChart() {
   const series = useMemo<Series[]>(() => {
     if (!s || s.daily.length !== days * GROUP_COUNT) return [];
     const out: Series[] = [];
-    for (let g = 0; g < GROUP_COUNT; g++) {
+    // Same order as the category chips, so the legend, tooltip and table match them.
+    for (const g of GROUP_ORDER) {
       if (!on[g]) continue;
       const raw = new Float64Array(days);
       let sum = 0;

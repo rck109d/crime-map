@@ -14,7 +14,7 @@ import {
   theme,
   type Tab,
 } from "./state";
-import { GROUP_LABELS, GROUP_LONG_LABELS, THEMES } from "./theme";
+import { GROUP_LABELS, GROUP_LONG_LABELS, GROUP_ORDER, THEMES } from "./theme";
 import { About } from "./ui/About";
 import { Areas } from "./ui/Areas";
 import { FilterBar } from "./ui/FilterBar";
@@ -38,7 +38,7 @@ function Legend() {
   const on = groupsOn.value;
   return (
     <div class="group-legend" role="group" aria-label="Categories shown">
-      {GROUP_LABELS.map((label, g) => (
+      {GROUP_ORDER.map((g) => (
         <button
           key={g}
           class="group-toggle"
@@ -47,7 +47,7 @@ function Legend() {
           onClick={() => (groupsOn.value = on.map((v, i) => (i === g ? !v : v)))}
         >
           <span class="dot" style={on[g] ? { background: colors[g] } : { boxShadow: `inset 0 0 0 2px ${colors[g]}` }} />
-          <span class="group-name">{label}</span>
+          <span class="group-name">{GROUP_LABELS[g]}</span>
           <span class="group-count">{s ? fmtCompact(s.byGroup[g]) : ""}</span>
         </button>
       ))}

@@ -22,7 +22,7 @@ import {
   summary,
   theme,
 } from "../state";
-import { GROUP_LONG_LABELS, GROUP_SECTION_ORDER, THEMES } from "../theme";
+import { GROUP_LONG_LABELS, GROUP_ORDER, THEMES } from "../theme";
 import { Dialog } from "./Dialog";
 import { fmt } from "./format";
 import { CalendarIcon, CheckIcon, ChevronDown, CloseIcon } from "./icons";
@@ -261,7 +261,7 @@ function OffenseDialog({ open, onClose }: { open: boolean; onClose: () => void }
         value={query}
         onInput={(e) => setQuery(e.currentTarget.value)}
       />
-      {GROUP_SECTION_ORDER.map((g) => [g, groups[g] ?? []] as const).map(([g, list]) =>
+      {GROUP_ORDER.map((g) => [g, groups[g] ?? []] as const).map(([g, list]) =>
         list.length === 0 ? null : (
           <section key={g}>
             <h3 class="list-head">
