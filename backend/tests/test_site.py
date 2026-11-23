@@ -80,6 +80,25 @@ def test_site_files_match_the_archive(tmp_path, layer, server, records):
     assert manifest["nhoods"][cols["nhood"][0]] == (first["NhoodName"] or "")
     assert manifest["zones"][cols["zone"][0]] == (first["Zone"] or "")
 
+    # Flags: firearm = 1, family violence = 2, UCR Part I = 4.
+    order = [
+        inc
+        for month in months
+        for inc in json.loads((out / "detail" / f"{month['month']}.json").read_text())["inc"]
+    ]
+    checked = 0
+    for i, inc in enumerate(order):
+        sources = [r for r in server.records if r["IncidentNumber"] == inc]
+        if len(sources) != 1:
+            continue  # several offenses share this incident number
+        (source,) = sources
+        assert bool(cols["flags"][i] & 1) == (source["FireArmInvolved"] == "yes")
+        assert bool(cols["flags"][i] & 2) == (source["GAFamilyViolenceIndicator"] == "YES")
+        assert bool(cols["flags"][i] & 4) == (source["Part"] == "Part I")
+        checked += 1
+    assert checked >= 5
+    assert offense["part1"] == (first["Part"] == "Part I")
+
     # Detail rows line up with the points table, month by month.
     row = 0
     for month in months:

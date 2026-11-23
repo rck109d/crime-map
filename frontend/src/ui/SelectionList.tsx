@@ -2,7 +2,7 @@ import { useEffect, useState } from "preact/hooks";
 import { formatLong, formatMinute, formatShort, formatWeekday } from "../data/dates";
 import { locate } from "../data/format";
 import { loadDetail } from "../data/load";
-import { FLAG_FIREARM, type MonthDetail } from "../data/types";
+import { FLAG_FAMILY, FLAG_FIREARM, type MonthDetail } from "../data/types";
 import { calendar, manifest, points, selection, theme } from "../state";
 import { THEMES } from "../theme";
 import { plural } from "./format";
@@ -90,6 +90,7 @@ export function SelectionList() {
                 <span class="dot" style={{ background: colors[offense.group] }} />
                 <span>{offense.name}</span>
                 {p.flags[row] & FLAG_FIREARM ? <span class="badge">Firearm</span> : null}
+                {p.flags[row] & FLAG_FAMILY ? <span class="badge">Family violence</span> : null}
               </div>
               <dl>
                 <dt>Reported</dt>
@@ -127,6 +128,12 @@ export function SelectionList() {
                       {place}
                       {d && w && d.beat[w.row] ? ` · Beat ${d.beat[w.row]}` : ""}
                     </dd>
+                  </>
+                )}
+                {d && w && d.vic[w.row] && (
+                  <>
+                    <dt>Victims</dt>
+                    <dd>{d.vic[w.row]}</dd>
                   </>
                 )}
                 {d && w && (

@@ -7,8 +7,8 @@ long-term archive behind it.
 
 - Every incident as a point, colored by NIBRS class, or binned into a
   hexagon density map
-- Filter by date range, offense, firearm involvement, neighborhood / NPU /
-  police zone, or an area you draw on the map
+- Filter by date range, offense, UCR Part I, firearm involvement, family
+  violence, neighborhood / NPU / police zone, or an area you draw on the map
 - Daily trend lines with adjustable smoothing, a time-of-week grid, and
   rankings by offense and area
 - Tap any spot for the incidents there; download the filtered set as CSV or KML

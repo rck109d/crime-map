@@ -4,6 +4,8 @@ export interface OffenseInfo {
   name: string;
   code: string;
   bucket: string;
+  /** UCR Part I: the FBI's traditional index crimes. */
+  part1: boolean;
   /** Index into Manifest.groups. */
   group: number;
 }
@@ -83,10 +85,13 @@ export interface MonthDetail {
   to: string[];
   loc: number[];
   beat: string[];
+  /** Victim count; APD records it for crimes against persons only, so usually "". */
   vic: string[];
 }
 
 export const NO_COORD = 0xffff;
 export const UNKNOWN = 255;
 export const FLAG_FIREARM = 1;
+export const FLAG_FAMILY = 2;
+export const FLAG_PART1 = 4;
 export const GROUP_COUNT = 4;

@@ -1,3 +1,4 @@
+import type { Signal } from "@preact/signals";
 import { useMemo, useState } from "preact/hooks";
 import { formatRange } from "../data/dates";
 import {
@@ -6,11 +7,13 @@ import {
   area,
   calendar,
   clearFilters,
+  familyOnly,
   firearmOnly,
   groupsOn,
   lastDay,
   manifest,
   offenseSel,
+  part1Only,
   polygon,
   PRESETS,
   requested,
@@ -73,14 +76,13 @@ export function FilterBar() {
         <span class="chip-text">{offenseLabel}</span>
         <ChevronDown />
       </button>
-      <button
-        class={`chip ${firearmOnly.value ? "chip-on" : ""}`}
-        aria-pressed={firearmOnly.value}
-        onClick={() => (firearmOnly.value = !firearmOnly.value)}
-      >
-        {firearmOnly.value && <CheckIcon size={14} />}
-        <span>Firearm involved</span>
-      </button>
+      <Toggle
+        label="Part I only"
+        title="Offenses APD marks as UCR Part I: homicide, rape, robbery, aggravated assault, burglary, theft, motor vehicle theft, arson and human trafficking"
+        state={part1Only}
+      />
+      <Toggle label="Firearm involved" state={firearmOnly} />
+      <Toggle label="Family violence" title="Flagged by APD as family violence under Georgia law" state={familyOnly} />
       {activeFilterCount.value > 0 && (
         <button class="chip chip-ghost" onClick={clearFilters}>
           Clear all
@@ -89,6 +91,20 @@ export function FilterBar() {
       <DateDialog open={dialog === "date"} onClose={() => setDialog(null)} />
       <OffenseDialog open={dialog === "offense"} onClose={() => setDialog(null)} />
     </div>
+  );
+}
+
+function Toggle({ label, title, state }: { label: string; title?: string; state: Signal<boolean> }) {
+  return (
+    <button
+      class={`chip ${state.value ? "chip-on" : ""}`}
+      aria-pressed={state.value}
+      title={title}
+      onClick={() => (state.value = !state.value)}
+    >
+      {state.value && <CheckIcon size={14} />}
+      <span>{label}</span>
+    </button>
   );
 }
 
@@ -225,7 +241,10 @@ function OffenseDialog({ open, onClose }: { open: boolean; onClose: () => void }
                 <li key={o.id}>
                   <label class="row">
                     <input type="checkbox" checked={sel.has(o.id)} onChange={() => toggle(o.id)} />
-                    <span class="row-main">{o.name}</span>
+                    <span class="row-main">
+                      {o.name}
+                      {o.part1 && <span class="tag">Part I</span>}
+                    </span>
                     <span class="row-count">{fmt(o.count)}</span>
                   </label>
                 </li>
@@ -235,7 +254,7 @@ function OffenseDialog({ open, onClose }: { open: boolean; onClose: () => void }
         ),
       )}
       <p class="fine">
-        Counts are for {rangeLabel().toLowerCase()}
+        “Part I” marks the offenses the Part I only filter keeps. Counts are for {rangeLabel().toLowerCase()}
         {applied.value !== requested.value ? " (loading…)" : ""} with your other filters applied.
       </p>
     </Dialog>

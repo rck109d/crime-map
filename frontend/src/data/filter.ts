@@ -1,6 +1,6 @@
 import { lowerBoundDay } from "./format";
 import { pointInRing, type Ring } from "./geo";
-import { FLAG_FIREARM, GROUP_COUNT, NO_COORD, UNKNOWN, type Points } from "./types";
+import { FLAG_FAMILY, FLAG_FIREARM, GROUP_COUNT, NO_COORD, UNKNOWN, type Points } from "./types";
 
 export type AreaKind = "nhood" | "npu" | "zone";
 
@@ -15,7 +15,8 @@ export interface Filters {
   area: { kind: AreaKind; id: number } | null;
   /** Drawn area, in quantized coordinates. */
   polygon: Ring | null;
-  firearmOnly: boolean;
+  /** Flag bits a row must all have (firearm, family violence, Part I); 0 for no requirement. */
+  requireFlags: number;
 }
 
 export const HIDDEN = 255;
@@ -30,6 +31,7 @@ export interface Summary {
   /** Visible rows that have a map position. */
   mapped: number;
   firearm: number;
+  familyViolence: number;
   /** Counts ignoring the group switches (so a switched-off group still shows its size). */
   byGroup: Uint32Array;
   /** Counts ignoring the group switches and the offense selection. */
@@ -88,9 +90,11 @@ export function summarize(points: Points, f: Filters, sizes: Sizes): Summary {
   let total = 0;
   let mapped = 0;
   let firearm = 0;
+  let familyViolence = 0;
+  const required = f.requireFlags;
 
   for (let i = i0; i < i1; i++) {
-    if (f.firearmOnly && !(flags[i] & FLAG_FIREARM)) continue;
+    if ((flags[i] & required) !== required) continue;
     const px = x[i];
     const py = y[i];
     if (ring) {
@@ -118,12 +122,13 @@ export function summarize(points: Points, f: Filters, sizes: Sizes): Summary {
     total++;
     if (px !== NO_COORD) mapped++;
     if (flags[i] & FLAG_FIREARM) firearm++;
+    if (flags[i] & FLAG_FAMILY) familyViolence++;
     daily[(day[i] - d0) * GROUP_COUNT + g]++;
     const h = occHour[i];
     if (h !== UNKNOWN) hourDow[occDow[i] * 24 + h]++;
   }
 
-  return { i0, i1, style, total, mapped, firearm, byGroup, byOffense, byArea, daily, hourDow };
+  return { i0, i1, style, total, mapped, firearm, familyViolence, byGroup, byOffense, byArea, daily, hourDow };
 }
 
 /** Bounding box (quantized) of visible rows, or null if none are mapped. */

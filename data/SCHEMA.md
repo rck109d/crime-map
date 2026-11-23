@@ -89,7 +89,9 @@ The site at <https://rck109d.github.io/crime-map/> does not read these CSVs
 directly. On each deploy, `crimemap build-site` derives compact files from
 them (`manifest.json`, `points-YYYY.bin`, `detail/YYYY-MM.json`); those are
 build output and are not committed. The map shows report dates from 2021
-onward and leaves out `unusual-dates.csv`.
+onward and leaves out `unusual-dates.csv`. Of the columns above it uses the
+offense, class, dates, address, location type, coordinates, area fields,
+firearm and family-violence indicators, `Part` and `Vic_Count`.
 
 ## Querying
 

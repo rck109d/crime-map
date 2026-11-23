@@ -4,7 +4,15 @@ import { summarize, type AreaKind, type Filters, type Summary } from "./data/fil
 import { combineYears } from "./data/format";
 import { makeGeo, type Geo } from "./data/geo";
 import { loadManifest, loadYear } from "./data/load";
-import { GROUP_COUNT, type Manifest, type PointColumns, type Points } from "./data/types";
+import {
+  FLAG_FAMILY,
+  FLAG_FIREARM,
+  FLAG_PART1,
+  GROUP_COUNT,
+  type Manifest,
+  type PointColumns,
+  type Points,
+} from "./data/types";
 import type { ThemeName } from "./theme";
 
 export type Preset = "7d" | "30d" | "90d" | "ytd" | "1y" | "all" | "custom";
@@ -61,6 +69,9 @@ export const offenseSel = signal<number[]>([]);
 export const area = signal<{ kind: AreaKind; id: number } | null>(null);
 export const polygon = signal<LngLat[] | null>(null);
 export const firearmOnly = signal(false);
+export const familyOnly = signal(false);
+/** UCR Part I offenses only: one switch standing in for a fixed list of serious offenses. */
+export const part1Only = signal(false);
 
 // --- view ------------------------------------------------------------------
 export const mode = signal<MapMode>("points");
@@ -120,7 +131,10 @@ export const filters = computed<Filters | null>(() => {
     offenses: sel.length ? new Set(sel) : null,
     area: area.value,
     polygon: poly ? poly.map(([lng, lat]) => [g.x(lng), g.y(lat)] as const) : null,
-    firearmOnly: firearmOnly.value,
+    requireFlags:
+      (firearmOnly.value ? FLAG_FIREARM : 0) |
+      (familyOnly.value ? FLAG_FAMILY : 0) |
+      (part1Only.value ? FLAG_PART1 : 0),
   };
 });
 
@@ -150,6 +164,8 @@ export const activeFilterCount = computed(
     (area.value ? 1 : 0) +
     (polygon.value ? 1 : 0) +
     (firearmOnly.value ? 1 : 0) +
+    (familyOnly.value ? 1 : 0) +
+    (part1Only.value ? 1 : 0) +
     (groupsOn.value.every(Boolean) ? 0 : 1),
 );
 
@@ -158,6 +174,8 @@ export function clearFilters() {
   area.value = null;
   polygon.value = null;
   firearmOnly.value = false;
+  familyOnly.value = false;
+  part1Only.value = false;
   groupsOn.value = Array(GROUP_COUNT).fill(true);
 }
 
@@ -271,6 +289,8 @@ function readUrl(): DayRange | null {
     }
   }
   if (q.get("f") === "1") firearmOnly.value = true;
+  if (q.get("fv") === "1") familyOnly.value = true;
+  if (q.get("p1") === "1") part1Only.value = true;
   if (q.get("m") === "density") mode.value = "density";
   const t = q.get("t");
   if (t === "trends" || t === "areas") tab.value = t;
@@ -295,6 +315,8 @@ effect(() => {
     a: area.value,
     p: polygon.value,
     f: firearmOnly.value,
+    fv: familyOnly.value,
+    p1: part1Only.value,
     m: mode.value,
     t: tab.value,
     v: mapView.value,
@@ -310,6 +332,8 @@ effect(() => {
   }
   if (state.p) q.set("p", state.p.map(([x, y]) => `${x.toFixed(5)},${y.toFixed(5)}`).join(";"));
   if (state.f) q.set("f", "1");
+  if (state.fv) q.set("fv", "1");
+  if (state.p1) q.set("p1", "1");
   if (state.m !== "points") q.set("m", state.m);
   if (state.t !== "overview") q.set("t", state.t);
   if (state.v) {

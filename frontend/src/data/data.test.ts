@@ -8,7 +8,16 @@ import { combineYears, decodePoints, isGzip, locate, lowerBoundDay } from "./for
 import { makeGeo, pointInRing } from "./geo";
 import { binHex, classOf, hexAt, hexBreaks, hexRing, rowsInHex } from "./hexbin";
 import { gaussianSmooth, niceTicks } from "./smooth";
-import { GROUP_COUNT, NO_COORD, UNKNOWN, type Manifest, type PointColumns } from "./types";
+import {
+  FLAG_FAMILY,
+  FLAG_FIREARM,
+  FLAG_PART1,
+  GROUP_COUNT,
+  NO_COORD,
+  UNKNOWN,
+  type Manifest,
+  type PointColumns,
+} from "./types";
 
 /** rows: [day, x, y, offense, nhood, npu, zone, flags, occHour, occDow] */
 function table(rows: number[][]): PointColumns {
@@ -58,9 +67,9 @@ const manifest: Manifest = {
   coordSteps: 65534,
   groups: ["Person", "Property", "Society", "Unclassified"],
   offenses: [
-    { name: "Simple Assault", code: "13B", bucket: "Assault Offenses", group: 0 },
-    { name: "Shoplifting", code: "23C", bucket: "Shoplifting", group: 1 },
-    { name: "Unclassified", code: "NOT_APPL", bucket: "Unclassified", group: 3 },
+    { name: "Simple Assault", code: "13B", bucket: "Assault Offenses", group: 0, part1: false },
+    { name: "Shoplifting", code: "23C", bucket: "Shoplifting", group: 1, part1: true },
+    { name: "Unclassified", code: "NOT_APPL", bucket: "Unclassified", group: 3, part1: false },
   ],
   nhoods: ["", "Midtown", "Downtown"],
   npus: ["", "E", "M"],
@@ -72,14 +81,14 @@ const manifest: Manifest = {
   ],
 };
 const y2021 = table([
-  [0, 100, 100, 0, 1, 1, 1, 1, 13, 5],
-  [0, 100, 100, 1, 1, 1, 1, 0, 0, 5],
-  [3, 5000, 5000, 1, 2, 2, 1, 0, UNKNOWN, UNKNOWN],
+  [0, 100, 100, 0, 1, 1, 1, 3, 13, 5],
+  [0, 100, 100, 1, 1, 1, 1, 4, 0, 5],
+  [3, 5000, 5000, 1, 2, 2, 1, 4, UNKNOWN, UNKNOWN],
   [40, NO_COORD, NO_COORD, 2, 0, 0, 0, 0, 9, 1],
 ]);
 const y2022 = table([
   [366, 120, 110, 0, 1, 1, 1, 0, 22, 0],
-  [367, 9000, 9000, 1, 2, 2, 1, 1, 23, 0],
+  [367, 9000, 9000, 1, 2, 2, 1, 5, 23, 0],
 ]);
 const sizes = { offenses: 3, nhoods: 3, npus: 3, zones: 2 };
 const all: Filters = {
@@ -89,7 +98,7 @@ const all: Filters = {
   offenses: null,
   area: null,
   polygon: null,
-  firearmOnly: false,
+  requireFlags: 0,
 };
 const points = combineYears(manifest, new Map([[2022, y2022], [2021, y2021]]));
 
@@ -150,6 +159,7 @@ describe("summarize", () => {
     expect(s.total).toBe(6);
     expect(s.mapped).toBe(5);
     expect(s.firearm).toBe(2);
+    expect(s.familyViolence).toBe(1);
     expect([...s.byGroup]).toEqual([2, 3, 0, 1]);
     expect([...s.byOffense]).toEqual([2, 3, 1]);
     expect([...s.byArea.nhood]).toEqual([1, 3, 2]);
@@ -178,7 +188,13 @@ describe("summarize", () => {
     expect(area.total).toBe(3);
     expect([...area.byArea.nhood]).toEqual([1, 3, 2]); // other areas stay listed
     expect([...area.byOffense]).toEqual([2, 1, 0]);
-    expect(summarize(points, { ...all, firearmOnly: true }, sizes).total).toBe(2);
+    expect(summarize(points, { ...all, requireFlags: FLAG_FIREARM }, sizes).total).toBe(2);
+    expect(summarize(points, { ...all, requireFlags: FLAG_FAMILY }, sizes).total).toBe(1);
+    // Part I only: one switch narrows every count, including the per-offense ones.
+    const part1 = summarize(points, { ...all, requireFlags: FLAG_PART1 }, sizes);
+    expect(part1.total).toBe(3);
+    expect([...part1.byOffense]).toEqual([0, 3, 0]);
+    expect(summarize(points, { ...all, requireFlags: FLAG_PART1 | FLAG_FIREARM }, sizes).total).toBe(1);
     const ring = [[50, 50], [200, 50], [200, 200], [50, 200]] as const;
     const drawn = summarize(points, { ...all, polygon: ring }, sizes);
     expect(drawn.total).toBe(3); // the unmapped row can never be inside
@@ -258,6 +274,9 @@ describe("export", () => {
     offense: 'Theft <"quoted">, & more',
     category: "Property",
     firearm: false,
+    familyViolence: true,
+    partI: true,
+    victims: "2",
     address: "=HYPERLINK(1)",
     locationType: "Residence home",
     neighborhood: "Midtown",
@@ -269,7 +288,8 @@ describe("export", () => {
   };
   it("writes CSV with quoting and formula protection", () => {
     const [header, line] = toCsv([row]).trimEnd().split("\n");
-    expect(header.split(",")).toHaveLength(15);
+    expect(header.split(",")).toHaveLength(18);
+    expect(line).toContain(",Property,no,yes,yes,2,");
     expect(line).toContain('"Theft <""quoted"">, & more"');
     expect(line).toContain(",'=HYPERLINK(1),");
     expect(line.endsWith("-84.38,33.78")).toBe(true);

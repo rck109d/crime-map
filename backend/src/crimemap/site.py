@@ -45,6 +45,10 @@ UNCLASSIFIED_GROUP = len(GROUPS)
 UNCLASSIFIED_NAME = "Unclassified"
 
 FLAG_FIREARM = 1
+FLAG_FAMILY_VIOLENCE = 2
+# UCR "Part I" (the FBI's traditional index crimes). It follows from the offense,
+# but is stored per row so the browser can filter on it like any other flag.
+FLAG_PART_ONE = 4
 UNKNOWN_U8 = 255
 
 
@@ -170,6 +174,7 @@ def build_site(data_dir: Path, out_dir: Path) -> dict:
                             "name": name,
                             "code": row.get("NibrsUcrCode", ""),
                             "bucket": row.get("NIBRS_Bucket", "") or name,
+                            "part1": row.get("Part") == "Part I",
                             "group": GROUPS.index(against)
                             if against in GROUPS
                             else UNCLASSIFIED_GROUP,
@@ -179,7 +184,11 @@ def build_site(data_dir: Path, out_dir: Path) -> dict:
                 nhood.append(nhoods.id(row.get("NhoodName", "")))
                 npu.append(npus.id(row.get("NPU", "")))
                 zone.append(zones.id(row.get("Zone", "")))
-                flags.append(FLAG_FIREARM if row.get("FireArmInvolved") == "yes" else 0)
+                flags.append(
+                    (FLAG_FIREARM if row.get("FireArmInvolved") == "yes" else 0)
+                    | (FLAG_FAMILY_VIOLENCE if row.get("GAFamilyViolenceIndicator") == "YES" else 0)
+                    | (FLAG_PART_ONE if row.get("Part") == "Part I" else 0)
+                )
 
                 occurred = local_parts(row.get("OccurredFromDate", ""))
                 if occurred is None:

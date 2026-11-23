@@ -101,6 +101,12 @@ export function About({ open, onClose }: { open: boolean; onClose: () => void })
             “Unclassified” records were published without a NIBRS offense. Locations are the addresses APD
             publishes{m && m.unmapped > 0 ? `; ${fmt(m.unmapped)} records have none that can be mapped` : ""}.
           </li>
+          <li>
+            “Part I only” keeps the offenses APD marks as Part I, the FBI's traditional list of serious crimes:
+            homicide, rape, robbery, aggravated assault, burglary, theft, motor vehicle theft, arson and human
+            trafficking. “Family violence” is APD's flag under Georgia law. A victim count is
+            recorded for crimes against persons only.
+          </li>
           <li>Dates filter by when an incident was reported, which can be days or months after it happened.</li>
         </ul>
         <p class="fine">

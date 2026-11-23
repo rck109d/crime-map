@@ -39,6 +39,11 @@ export function Overview() {
           <div class="tile-value">{fmt(s.firearm)}</div>
           <div class="tile-note">{s.total ? `${fmt1((s.firearm / s.total) * 100)}% of incidents` : " "}</div>
         </div>
+        <div class="tile">
+          <div class="tile-label">Family violence</div>
+          <div class="tile-value">{fmt(s.familyViolence)}</div>
+          <div class="tile-note">{s.total ? `${fmt1((s.familyViolence / s.total) * 100)}% of incidents` : " "}</div>
+        </div>
         {s.total - s.mapped > 0 && (
           <div class="tile">
             <div class="tile-label">Not on the map</div>

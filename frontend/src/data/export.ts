@@ -8,6 +8,11 @@ export interface ExportRow {
   offense: string;
   category: string;
   firearm: boolean;
+  familyViolence: boolean;
+  /** UCR Part I offense. */
+  partI: boolean;
+  /** Recorded for crimes against persons only. */
+  victims: string;
   address: string;
   locationType: string;
   neighborhood: string;
@@ -26,6 +31,9 @@ const COLUMNS: (keyof ExportRow)[] = [
   "offense",
   "category",
   "firearm",
+  "familyViolence",
+  "partI",
+  "victims",
   "address",
   "locationType",
   "neighborhood",
