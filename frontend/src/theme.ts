@@ -22,14 +22,17 @@ export interface DataTheme {
 
 /**
  * The stock dark basemap draws streets and their names barely lighter than the
- * ground. These lift roads, rail, outlines and labels a few steps so the map
- * can be read at a glance, while staying well below the brightness of the data.
+ * ground. These lift roads, rail and outlines a few steps, and make the labels
+ * as bright as the text in the rest of the interface.
  */
-const DARK_LABEL = { "text-color": "#b4b2ad", "text-halo-color": "rgba(0,0,0,0.85)" };
+// Label colours match the interface's own dark-mode text: place names use the
+// primary text colour (--ink), street names the secondary one (--ink-2).
+const DARK_LABEL = { "text-color": "#f0efec", "text-halo-color": "rgba(0,0,0,0.9)" };
+const DARK_STREET_LABEL = { "text-color": "#c3c2b7", "text-halo-color": "rgba(0,0,0,0.9)" };
 const DARK_BASEMAP_PAINT: Record<string, Record<string, unknown>> = {
   water: { "fill-color": "#1c232e" },
   waterway: { "line-color": "#1c232e" },
-  water_name: { "text-color": "#7f8ea3", "text-halo-color": "rgba(0,0,0,0.7)" },
+  water_name: { "text-color": "#a9bbd3", "text-halo-color": "rgba(0,0,0,0.8)" },
   building: { "fill-outline-color": "#2b2b2d" },
   highway_path: { "line-color": "#38383a" },
   highway_minor: { "line-color": "#343436" },
@@ -43,8 +46,8 @@ const DARK_BASEMAP_PAINT: Record<string, Record<string, unknown>> = {
   railway_minor: { "line-color": "#4a4a4d" },
   railway: { "line-color": "#4a4a4d" },
   boundary_state: { "line-color": "#5a5a5d" },
-  highway_name_other: { "text-color": "#a09e99", "text-halo-color": "rgba(0,0,0,0.85)" },
-  highway_name_motorway: { "text-color": "#b4b2ad" },
+  highway_name_other: DARK_STREET_LABEL,
+  highway_name_motorway: DARK_STREET_LABEL,
   place_other: DARK_LABEL,
   place_suburb: DARK_LABEL,
   place_village: DARK_LABEL,
