@@ -2,6 +2,8 @@
 
 export interface ExportRow {
   incident: string;
+  /** Incident number plus the report sequence, e.g. "263022680-1". */
+  reportNumber: string;
   reported: string;
   occurredFrom: string;
   occurredTo: string;
@@ -25,6 +27,7 @@ export interface ExportRow {
 
 const COLUMNS: (keyof ExportRow)[] = [
   "incident",
+  "reportNumber",
   "reported",
   "occurredFrom",
   "occurredTo",

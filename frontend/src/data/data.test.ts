@@ -7,6 +7,7 @@ import { nearby, summarize, visibleBounds, type Filters } from "./filter";
 import { combineYears, decodePoints, isGzip, locate, lowerBoundDay } from "./format";
 import { makeGeo, pointInRing } from "./geo";
 import { binHex, classOf, hexAt, hexBreaks, hexRing, rowsInHex } from "./hexbin";
+import { groupByIncident, incidentRun } from "./incidents";
 import { gaussianSmooth, niceTicks } from "./smooth";
 import {
   FLAG_FAMILY,
@@ -268,6 +269,7 @@ describe("smoothing", () => {
 describe("export", () => {
   const row: ExportRow = {
     incident: "262821556",
+    reportNumber: "262821556-1",
     reported: "2026-10-10 18:22",
     occurredFrom: "2026-10-10 17:00",
     occurredTo: "",
@@ -288,7 +290,8 @@ describe("export", () => {
   };
   it("writes CSV with quoting and formula protection", () => {
     const [header, line] = toCsv([row]).trimEnd().split("\n");
-    expect(header.split(",")).toHaveLength(18);
+    expect(header.split(",")).toHaveLength(19);
+    expect(line.startsWith("262821556,262821556-1,")).toBe(true);
     expect(line).toContain(",Property,no,yes,yes,2,");
     expect(line).toContain('"Theft <""quoted"">, & more"');
     expect(line).toContain(",'=HYPERLINK(1),");
@@ -300,6 +303,26 @@ describe("export", () => {
     expect(kml).toContain("<name>Test &#38; export</name>");
     expect(kml).toContain("<coordinates>-84.38,33.78,0</coordinates>");
     expect(kml).not.toContain('<"quoted">');
+  });
+});
+
+describe("incident grouping", () => {
+  // Rows 1-2 continue row 0 (one report, three offenses); row 5 continues row 4.
+  const flags = Uint8Array.from([0, 8, 8 | 1, 0, 2, 8, 0]);
+  it("finds the whole incident from any of its rows", () => {
+    expect(incidentRun(flags, 0)).toEqual({ start: 0, end: 3 });
+    expect(incidentRun(flags, 2)).toEqual({ start: 0, end: 3 });
+    expect(incidentRun(flags, 3)).toEqual({ start: 3, end: 4 });
+    expect(incidentRun(flags, 5)).toEqual({ start: 4, end: 6 });
+    expect(incidentRun(flags, 6)).toEqual({ start: 6, end: 7 });
+  });
+  it("lists each incident once, in the order first met", () => {
+    expect(groupByIncident(flags, [5, 2, 1, 6, 4, 0])).toEqual([
+      { start: 4, end: 6 },
+      { start: 0, end: 3 },
+      { start: 6, end: 7 },
+    ]);
+    expect(groupByIncident(flags, [])).toEqual([]);
   });
 });
 

@@ -852,16 +852,42 @@ tbody tr:last-child > * {
 }
 .incident-title {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 650;
-  margin-bottom: 6px;
-}
-.incident-title {
+  align-items: flex-start;
   flex-wrap: wrap;
+  gap: 6px 8px;
+  margin-bottom: 8px;
 }
-.incident-title > span:nth-child(2) {
-  flex: 1 1 50%;
+/* One line per offense recorded under the incident. */
+.offenses {
+  flex: 1 1 60%;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-weight: 650;
+}
+.offenses li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.offenses .dot {
+  transform: translateY(-1px);
+}
+.offense-note {
+  margin-left: 8px;
+  color: var(--ink-3);
+  font-size: 13px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+.offense-muted {
+  color: var(--ink-3);
+  font-weight: 500;
+}
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
 }
 .tag {
   margin-left: 8px;

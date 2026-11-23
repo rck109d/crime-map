@@ -80,6 +80,8 @@ export interface Points extends PointColumns {
 
 export interface MonthDetail {
   inc: string[];
+  /** Report sequence: "1" for the original report, higher for supplements. */
+  rep: string[];
   addr: string[];
   from: string[];
   to: string[];
@@ -94,4 +96,6 @@ export const UNKNOWN = 255;
 export const FLAG_FIREARM = 1;
 export const FLAG_FAMILY = 2;
 export const FLAG_PART1 = 4;
+/** This row is another offense of the same report as the row before it. */
+export const FLAG_SAME_INCIDENT = 8;
 export const GROUP_COUNT = 4;

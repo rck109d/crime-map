@@ -49,6 +49,11 @@ FLAG_FAMILY_VIOLENCE = 2
 # UCR "Part I" (the FBI's traditional index crimes). It follows from the offense,
 # but is stored per row so the browser can filter on it like any other flag.
 FLAG_PART_ONE = 4
+# Set on a row that belongs to the same report as the row before it: same
+# incident number and report time. APD publishes one row per offense, and the
+# archive's sort order keeps the rows of one report together, so a run of rows
+# joined by this flag is one incident with all its offenses.
+FLAG_SAME_INCIDENT = 8
 UNKNOWN_U8 = 255
 
 
@@ -146,8 +151,9 @@ def build_site(data_dir: Path, out_dir: Path) -> dict:
         months = []
         for path in paths:
             _, rows = read_csv(path)
-            detail = {k: [] for k in ("inc", "addr", "from", "to", "loc", "beat", "vic")}
+            detail = {k: [] for k in ("inc", "rep", "addr", "from", "to", "loc", "beat", "vic")}
             kept = 0
+            previous_report = None
             for row in rows:
                 reported = local_parts(row.get("ReportDate", ""))
                 if reported is None:
@@ -184,11 +190,15 @@ def build_site(data_dir: Path, out_dir: Path) -> dict:
                 nhood.append(nhoods.id(row.get("NhoodName", "")))
                 npu.append(npus.id(row.get("NPU", "")))
                 zone.append(zones.id(row.get("Zone", "")))
+                incident = row.get("IncidentNumber", "")
+                this_report = (row.get("ReportDate", ""), incident)
                 flags.append(
                     (FLAG_FIREARM if row.get("FireArmInvolved") == "yes" else 0)
                     | (FLAG_FAMILY_VIOLENCE if row.get("GAFamilyViolenceIndicator") == "YES" else 0)
                     | (FLAG_PART_ONE if row.get("Part") == "Part I" else 0)
+                    | (FLAG_SAME_INCIDENT if incident and this_report == previous_report else 0)
                 )
+                previous_report = this_report
 
                 occurred = local_parts(row.get("OccurredFromDate", ""))
                 if occurred is None:
@@ -198,7 +208,14 @@ def build_site(data_dir: Path, out_dir: Path) -> dict:
                     occ_hour.append(occurred.hour)
                     occ_dow.append((occurred.weekday() + 1) % 7)  # Sunday = 0
 
-                detail["inc"].append(row.get("IncidentNumber", ""))
+                detail["inc"].append(incident)
+                # Report numbers are "<incident>-<n>": n is 1 for the original
+                # report and counts up with each supplement. Only n is stored.
+                report_number = row.get("ReportNumber", "")
+                prefix = incident + "-"
+                detail["rep"].append(
+                    report_number[len(prefix) :] if report_number.startswith(prefix) else ""
+                )
                 detail["addr"].append(row.get("StreetAddress", ""))
                 detail["from"].append(row.get("OccurredFromDate", "")[:16])
                 detail["to"].append(row.get("OccurredToDate", "")[:16])

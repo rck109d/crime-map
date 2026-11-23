@@ -1,14 +1,18 @@
 import { useEffect, useState } from "preact/hooks";
 import { formatLong, formatMinute, formatShort, formatWeekday } from "../data/dates";
+import { HIDDEN } from "../data/filter";
 import { locate } from "../data/format";
+import { groupByIncident } from "../data/incidents";
 import { loadDetail } from "../data/load";
 import { FLAG_FAMILY, FLAG_FIREARM, type MonthDetail } from "../data/types";
-import { calendar, manifest, points, selection, theme } from "../state";
+import { calendar, manifest, points, selection, summary, theme } from "../state";
 import { THEMES } from "../theme";
-import { plural } from "./format";
+import { fmt, plural } from "./format";
 import { BackIcon } from "./icons";
 
 const PAGE = 25;
+/** The map hands over at most this many rows, so a full list may be incomplete. */
+const ROW_LIMIT = 500;
 
 /** "2026-10-10T17:00" -> "Oct 10, 5:00 PM" */
 function formatStamp(stamp: string): string {
@@ -21,10 +25,12 @@ function formatStamp(stamp: string): string {
 
 export function SelectionHeader() {
   const sel = selection.value;
-  if (!sel) return null;
-  const total = sel.rows.length;
+  const p = points.value;
+  if (!sel || !p) return null;
+  const count = groupByIncident(p.flags, sel.rows).length;
   const title =
-    (total >= 500 ? "500+ incidents" : plural(total, "incident")) + (sel.kind === "cell" ? " in this cell" : total > 1 ? " here" : "");
+    (sel.rows.length >= ROW_LIMIT ? `${fmt(count)}+ incidents` : plural(count, "incident")) +
+    (sel.kind === "cell" ? " in this cell" : count > 1 ? " here" : "");
   return (
     <div class="selection-head">
       <button class="icon-button" onClick={() => (selection.value = null)} aria-label="Back to summary">
@@ -35,11 +41,16 @@ export function SelectionHeader() {
   );
 }
 
+/**
+ * One card per incident. APD publishes a row per offense, so the offenses
+ * recorded under one report are gathered onto a single card.
+ */
 export function SelectionList() {
   const sel = selection.value;
   const p = points.value;
   const m = manifest.value;
   const cal = calendar.value;
+  const s = summary.value;
   const [details, setDetails] = useState<Map<string, MonthDetail>>(new Map());
   const [failed, setFailed] = useState(false);
   const [limit, setLimit] = useState(PAGE);
@@ -49,8 +60,10 @@ export function SelectionList() {
     setFailed(false);
   }, [sel]);
 
-  const shown = sel && p ? sel.rows.slice(0, limit) : [];
-  const where = p ? shown.map((row) => locate(p, row)) : [];
+  const incidents = sel && p ? groupByIncident(p.flags, sel.rows) : [];
+  const shown = incidents.slice(0, limit);
+  // Every row of a report falls in the same month file.
+  const where = p ? shown.map((run) => locate(p, run.start)) : [];
   const months = [...new Set(where.flatMap((w) => (w ? [w.month] : [])))].sort();
   const monthsKey = months.join(",");
   useEffect(() => {
@@ -70,46 +83,71 @@ export function SelectionList() {
 
   if (!sel || !p || !m || !cal) return null;
   const colors = THEMES[theme.value].groups;
-  const total = sel.rows.length;
 
   return (
     <div class="selection">
       {failed && <p class="empty">Could not load the details for these incidents. Check your connection and tap the map again.</p>}
       <ul class="incidents">
-        {shown.map((row, k) => {
+        {shown.map((run, k) => {
           const w = where[k];
           const d = w ? details.get(w.month) : undefined;
-          const offense = m.offenses[p.offense[row]];
-          const reported = cal.date(p.day[row]);
-          const place = [m.nhoods[p.nhood[row]], m.zones[p.zone[row]], m.npus[p.npu[row]] && `NPU ${m.npus[p.npu[row]]}`]
+          const first = run.start;
+          const rows = Array.from({ length: run.end - run.start }, (_, i) => run.start + i);
+          // Row of the detail file for each offense of this incident.
+          const detailRow = (row: number) => (w ? w.row + (row - first) : -1);
+          const reported = cal.date(p.day[first]);
+          const place = [m.nhoods[p.nhood[first]], m.zones[p.zone[first]], m.npus[p.npu[first]] && `NPU ${m.npus[p.npu[first]]}`]
             .filter(Boolean)
             .join(" · ");
+          const firearm = rows.some((row) => p.flags[row] & FLAG_FIREARM);
+          const family = rows.some((row) => p.flags[row] & FLAG_FAMILY);
+          const at = detailRow(first);
           return (
-            <li key={row} class="incident">
+            <li key={first} class="incident">
               <div class="incident-title">
-                <span class="dot" style={{ background: colors[offense.group] }} />
-                <span>{offense.name}</span>
-                {p.flags[row] & FLAG_FIREARM ? <span class="badge">Firearm</span> : null}
-                {p.flags[row] & FLAG_FAMILY ? <span class="badge">Family violence</span> : null}
+                <ul class="offenses" aria-label={rows.length > 1 ? `${rows.length} offenses` : undefined}>
+                  {rows.map((row) => {
+                    const offense = m.offenses[p.offense[row]];
+                    const victims = d ? Number(d.vic[detailRow(row)]) : 0;
+                    // Part of the incident, but not matching the filters in use.
+                    const filteredOut = s ? s.style[row] === HIDDEN : false;
+                    return (
+                      <li key={row} class={filteredOut ? "offense-muted" : ""}>
+                        <span class="dot" style={{ background: colors[offense.group] }} />
+                        <span>
+                          {offense.name}
+                          {victims > 0 && <span class="offense-note">{plural(victims, "victim")}</span>}
+                          {filteredOut && <span class="offense-note">outside your filters</span>}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+                {(firearm || family) && (
+                  <div class="badges">
+                    {firearm && <span class="badge">Firearm</span>}
+                    {family && <span class="badge">Family violence</span>}
+                  </div>
+                )}
               </div>
               <dl>
                 <dt>Reported</dt>
                 <dd>
-                  {formatWeekday(reported)}, {formatLong(reported)} · {formatMinute(p.minute[row])}
+                  {formatWeekday(reported)}, {formatLong(reported)} · {formatMinute(p.minute[first])}
                 </dd>
                 {d && w ? (
                   <>
                     <dt>Occurred</dt>
                     <dd>
-                      {formatStamp(d.from[w.row])}
-                      {d.to[w.row] && d.to[w.row] !== d.from[w.row] ? ` – ${formatStamp(d.to[w.row])}` : ""}
+                      {formatStamp(d.from[at])}
+                      {d.to[at] && d.to[at] !== d.from[at] ? ` – ${formatStamp(d.to[at])}` : ""}
                     </dd>
                     <dt>Location</dt>
-                    <dd>{d.addr[w.row] || "Not recorded"}</dd>
-                    {m.locationTypes[d.loc[w.row]] && (
+                    <dd>{d.addr[at] || "Not recorded"}</dd>
+                    {m.locationTypes[d.loc[at]] && (
                       <>
                         <dt>Place</dt>
-                        <dd>{m.locationTypes[d.loc[w.row]]}</dd>
+                        <dd>{m.locationTypes[d.loc[at]]}</dd>
                       </>
                     )}
                   </>
@@ -126,20 +164,14 @@ export function SelectionList() {
                     <dt>Area</dt>
                     <dd>
                       {place}
-                      {d && w && d.beat[w.row] ? ` · Beat ${d.beat[w.row]}` : ""}
+                      {d && w && d.beat[at] ? ` · Beat ${d.beat[at]}` : ""}
                     </dd>
-                  </>
-                )}
-                {d && w && d.vic[w.row] && (
-                  <>
-                    <dt>Victims</dt>
-                    <dd>{d.vic[w.row]}</dd>
                   </>
                 )}
                 {d && w && (
                   <>
-                    <dt>Incident</dt>
-                    <dd class="mono">{d.inc[w.row]}</dd>
+                    <dt>Report</dt>
+                    <dd class="mono">{d.rep?.[at] ? `${d.inc[at]}-${d.rep[at]}` : d.inc[at]}</dd>
                   </>
                 )}
               </dl>
@@ -147,9 +179,9 @@ export function SelectionList() {
           );
         })}
       </ul>
-      {total > limit && (
+      {incidents.length > limit && (
         <button class="link" onClick={() => setLimit(limit + PAGE)}>
-          Show {Math.min(PAGE, total - limit)} more
+          Show {Math.min(PAGE, incidents.length - limit)} more
         </button>
       )}
     </div>

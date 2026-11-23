@@ -99,6 +99,20 @@ def test_site_files_match_the_archive(tmp_path, layer, server, records):
     assert checked >= 5
     assert offense["part1"] == (first["Part"] == "Part I")
 
+    # Flag 8 joins the offenses of one report: the three rows of incident
+    # 262821556 form one run, and no other row continues its predecessor.
+    joined = [bool(f & 8) for f in cols["flags"]]
+    first_of_three = order.index("262821556")
+    assert order[first_of_three : first_of_three + 3] == ["262821556"] * 3
+    assert joined[first_of_three : first_of_three + 3] == [False, True, True]
+    assert sum(joined) == 2
+    reports = [
+        rep
+        for month in months
+        for rep in json.loads((out / "detail" / f"{month['month']}.json").read_text())["rep"]
+    ]
+    assert reports[first_of_three] == "1"  # report number 262821556-1
+
     # Detail rows line up with the points table, month by month.
     row = 0
     for month in months:

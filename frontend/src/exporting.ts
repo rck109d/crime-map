@@ -42,6 +42,7 @@ async function collect(onProgress: (done: number, total: number) => void): Promi
     const mapped = p.x[i] !== NO_COORD;
     return {
       incident: d.inc[w.row],
+      reportNumber: d.rep?.[w.row] ? `${d.inc[w.row]}-${d.rep[w.row]}` : d.inc[w.row],
       reported: `${cal.iso(p.day[i])} ${pad(Math.floor(p.minute[i] / 60))}:${pad(p.minute[i] % 60)}`,
       occurredFrom: d.from[w.row].replace("T", " "),
       occurredTo: d.to[w.row].replace("T", " "),

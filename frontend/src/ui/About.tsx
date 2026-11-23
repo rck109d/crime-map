@@ -91,7 +91,7 @@ export function About({ open, onClose }: { open: boolean; onClose: () => void })
           </li>
           <li>
             Each record is one offense. An incident involving several offenses appears once for each, so counts are
-            offenses, not events or people.
+            offenses, not events or people. Tapping the map gathers an incident's offenses onto one card.
           </li>
           <li>
             Colors follow the FBI's NIBRS classes: crimes against persons, property, and society. Robbery, for
