@@ -943,6 +943,25 @@ tbody tr:last-child > * {
   min-width: 0;
   overflow-wrap: anywhere;
 }
+/* Links from a card to related incidents: same address, same street. */
+.card-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 16px;
+  margin-top: 10px;
+  padding-top: 6px;
+  border-top: 1px solid var(--grid);
+}
+.card-link {
+  min-height: 36px;
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 550;
+  text-align: left;
+}
+.card-link:hover {
+  text-decoration: underline;
+}
 .loading-text {
   color: var(--ink-3);
 }

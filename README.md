@@ -16,7 +16,9 @@ long-term archive behind it.
   index is built from the archive, so nothing typed leaves the browser.
   Separate tabs search businesses and landmarks through Photon or Nominatim
   (OpenStreetMap), and say plainly that those send what you type
-- Tap any spot for the incidents there; download the filtered set as CSV or KML
+- Tap any spot for the incidents there, each with links to the other
+  incidents at its address and on its street; download the filtered set as
+  CSV or KML
 - Every view has a shareable URL
 
 The data lives in [`data/`](data/) as plain monthly CSV files, refreshed from

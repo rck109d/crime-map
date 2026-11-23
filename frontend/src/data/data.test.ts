@@ -3,7 +3,7 @@ import { gunzipSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
 import { dateTicks, formatMinute, formatRange, makeCalendar } from "./dates";
 import { toCsv, toKml, type ExportRow } from "./export";
-import { nearby, rowsAtAddress, summarize, visibleBounds, type Filters } from "./filter";
+import { HIDDEN, incidentsByAddress, nearby, rowsAtAddress, summarize, visibleBounds, type Filters } from "./filter";
 import { combineYears, decodePoints, isGzip, locate, lowerBoundDay } from "./format";
 import { makeGeo, pointInRing } from "./geo";
 import { binHex, classOf, hexAt, hexBreaks, hexRing, rowsInHex } from "./hexbin";
@@ -544,5 +544,24 @@ describe("convex hull", () => {
     expect(convexHull([[5, 5]])).toEqual([[5, 5]]);
     expect(convexHull([[0, 0], [2, 2], [1, 1]])).toEqual([[0, 0], [2, 2]]);
     expect(convexHull([])).toEqual([]);
+  });
+});
+
+describe("incidents per address", () => {
+  it("counts each visible incident once, however many offenses it has", () => {
+    // Rows 0-1 are one report at address 5 (two offenses); row 2 another report there;
+    // row 3 has no address; rows 4-5 are one report at address 9, its second offense filtered out.
+    const flags = Uint8Array.from([0, 8, 0, 0, 0, 8]);
+    const address = Uint32Array.from([5, 5, 5, 0, 9, 9]);
+    const style = Uint8Array.from([1, 1, 0, 2, 0, HIDDEN]);
+    const counts = incidentsByAddress({ flags, address } as never, { i0: 0, i1: 6, style } as never);
+    expect(counts[5]).toBe(2);
+    expect(counts[9]).toBe(1);
+    expect(counts[0]).toBe(0); // "no address" is never a place to link to
+    // Only rows in the date range are counted.
+    expect(incidentsByAddress({ flags, address } as never, { i0: 2, i1: 4, style } as never)[5]).toBe(1);
+    // A report whose rows are all filtered out is not counted.
+    const hidden = Uint8Array.from([HIDDEN, HIDDEN, 0, 2, 0, HIDDEN]);
+    expect(incidentsByAddress({ flags, address } as never, { i0: 0, i1: 6, style: hidden } as never)[5]).toBe(1);
   });
 });

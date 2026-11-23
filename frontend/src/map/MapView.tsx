@@ -425,7 +425,7 @@ export const mapApi = {
    * address is selected even when nothing matches the current filters, so the
    * panel can say so instead of leaving the map looking empty.
    */
-  showAddress(at: LngLat, address: number, label: string, known: number) {
+  showAddress(at: LngLat, address: number, label: string, known: number, previous?: Selection) {
     const p = points.value;
     const s = summary.value;
     if (!map || !p || !s) return;
@@ -433,7 +433,15 @@ export const mapApi = {
     // because older reports of the same address can be mapped elsewhere.
     const marker = spotAt(at, MARKER_METERS);
     if (!marker) return;
-    selection.value = { ...marker, kind: "address", rows: rowsAtAddress(p, s, address), address, label, known };
+    selection.value = {
+      ...marker,
+      kind: "address",
+      rows: rowsAtAddress(p, s, address),
+      address,
+      label,
+      known,
+      previous,
+    };
     flyTo(at);
   },
   /** Go to a place found by an outside search and list the incidents around it. */

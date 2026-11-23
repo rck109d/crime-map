@@ -3,19 +3,24 @@ import { formatLong, formatMinute, formatShort, formatWeekday } from "../data/da
 import { HIDDEN } from "../data/filter";
 import { locate } from "../data/format";
 import { groupByIncident } from "../data/incidents";
-import { loadDetail } from "../data/load";
-import { FLAG_FAMILY, FLAG_FIREARM, type MonthDetail } from "../data/types";
+import { loadDetail, loadSearchIndex } from "../data/load";
+import { displayName, streetFilter } from "../data/search";
+import { FLAG_FAMILY, FLAG_FIREARM, NO_COORD, type MonthDetail } from "../data/types";
 import { mapApi, PLACE_METERS } from "../map/MapView";
 import {
+  addressCounts,
   calendar,
   clearFilters,
+  geo,
   manifest,
   points,
   resolvePreset,
   selection,
   setRange,
+  street,
   summary,
   theme,
+  type LngLat,
 } from "../state";
 import { THEMES } from "../theme";
 import { fmt, plural } from "./format";
@@ -24,6 +29,15 @@ import { BackIcon } from "./icons";
 const PAGE = 25;
 /** The map hands over at most this many rows, so a full list may be incomplete. */
 const ROW_LIMIT = 500;
+
+/** "3393 PEACHTREE RD NE" -> "PEACHTREE RD NE"; null for intersections and other unnumbered addresses. */
+function streetOf(address: string): string | null {
+  const space = address.indexOf(" ");
+  if (space <= 0 || address.includes("/")) return null;
+  const number = address.slice(0, space);
+  for (const ch of number) if (ch < "0" || ch > "9") return null;
+  return address.slice(space + 1).trim() || null;
+}
 
 /** "2026-10-10T17:00" -> "Oct 10, 5:00 PM" */
 function formatStamp(stamp: string): string {
@@ -54,12 +68,17 @@ export function SelectionHeader() {
                 : "");
   return (
     <div class="selection-head">
-      <button class="icon-button" onClick={() => (selection.value = null)} aria-label="Back to summary">
+      {/* Back goes to the list this one was opened from, if there was one. */}
+      <button
+        class="icon-button"
+        onClick={() => (selection.value = sel.previous ?? null)}
+        aria-label={sel.previous ? "Back to the previous list" : "Back to summary"}
+      >
         <BackIcon />
       </button>
       <div>
         <h3>{title}</h3>
-        {/* The address, when this spot was reached by searching for one. */}
+        {/* The address or place, when this list is about one. */}
         {sel.label && <p class="selection-sub">{sel.label}</p>}
       </div>
     </div>
@@ -79,10 +98,12 @@ export function SelectionList() {
   const [details, setDetails] = useState<Map<string, MonthDetail>>(new Map());
   const [failed, setFailed] = useState(false);
   const [limit, setLimit] = useState(PAGE);
+  const [streetState, setStreetState] = useState<"idle" | "loading" | "failed">("idle");
 
   useEffect(() => {
     setLimit(PAGE);
     setFailed(false);
+    setStreetState("idle");
   }, [sel]);
 
   const incidents = sel && p ? groupByIncident(p.flags, sel.rows) : [];
@@ -108,10 +129,35 @@ export function SelectionList() {
 
   if (!sel || !p || !m || !cal) return null;
   const colors = THEMES[theme.value].groups;
+  const counts = addressCounts.value;
+  const g = geo.value;
+
+  /** Open the other incidents at an incident's address, keeping this list to come back to. */
+  const openAddress = (row: number, addressId: number, address: string) => {
+    // An incident without a map position still has an address; keep the marker where it is.
+    const at: LngLat = g && p.x[row] !== NO_COORD ? [g.lng(p.x[row]), g.lat(p.y[row])] : sel.at;
+    mapApi.showAddress(at, addressId, displayName(address), 0, sel);
+  };
+
+  /** Filter the whole map to an incident's street, as picking it in search would. */
+  const openStreet = async (name: string) => {
+    setStreetState("loading");
+    try {
+      const found = streetFilter(await loadSearchIndex(m), name);
+      if (!found || !g) return setStreetState("failed");
+      setStreetState("idle");
+      street.value = found; // every count changes, which also closes this list
+      const [minX, minY, maxX, maxY] = found.box;
+      mapApi.fitBox(g.lng(minX), g.lat(minY), g.lng(maxX), g.lat(maxY));
+    } catch {
+      setStreetState("failed");
+    }
+  };
 
   return (
     <div class="selection">
       {failed && <p class="empty">Could not load the details for these incidents. Check your connection and tap the map again.</p>}
+      {streetState === "failed" && <p class="empty">That street could not be loaded. Check your connection and try again.</p>}
       {incidents.length === 0 && (
         <div class="empty-spot">
           <p>
@@ -146,6 +192,16 @@ export function SelectionList() {
           const place = [m.nhoods[p.nhood[first]], m.zones[p.zone[first]], m.npus[p.npu[first]] && `NPU ${m.npus[p.npu[first]]}`]
             .filter(Boolean)
             .join(" · ");
+          // Related incidents: others at the same address, and the street it is on.
+          // The address text arrives with the details, so the links wait for those.
+          const addressId = p.address[first];
+          const address = d && w ? (d.addr[detailRow(first)] ?? "").split(" ").filter(Boolean).join(" ") : "";
+          const total = counts && addressId > 0 && addressId < counts.length ? counts[addressId] : 0;
+          const others = Math.max(0, total - 1);
+          // In a list that is already this address, the link would lead nowhere new.
+          const showOthers = address !== "" && others > 0 && !(sel.kind === "address" && sel.address === addressId);
+          const onStreet = address ? streetOf(address) : null;
+          const showStreet = onStreet !== null && street.value?.name !== onStreet;
           const firearm = rows.some((row) => p.flags[row] & FLAG_FIREARM);
           const family = rows.some((row) => p.flags[row] & FLAG_FAMILY);
           const at = detailRow(first);
@@ -222,6 +278,20 @@ export function SelectionList() {
                   </>
                 )}
               </dl>
+              {(showOthers || showStreet) && (
+                <div class="card-links">
+                  {showOthers && (
+                    <button class="card-link" onClick={() => openAddress(first, addressId, address)}>
+                      {plural(others, "other incident")} at this address
+                    </button>
+                  )}
+                  {showStreet && onStreet && (
+                    <button class="card-link" disabled={streetState === "loading"} onClick={() => void openStreet(onStreet)}>
+                      On {displayName(onStreet)}
+                    </button>
+                  )}
+                </div>
+              )}
             </li>
           );
         })}

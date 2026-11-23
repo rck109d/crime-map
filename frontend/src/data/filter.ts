@@ -1,6 +1,14 @@
 import { lowerBoundDay } from "./format";
 import { pointInRing, type Ring } from "./geo";
-import { FLAG_FAMILY, FLAG_FIREARM, GROUP_COUNT, NO_COORD, UNKNOWN, type Points } from "./types";
+import {
+  FLAG_FAMILY,
+  FLAG_FIREARM,
+  FLAG_SAME_INCIDENT,
+  GROUP_COUNT,
+  NO_COORD,
+  UNKNOWN,
+  type Points,
+} from "./types";
 
 export type AreaKind = "nhood" | "npu" | "zone";
 
@@ -156,6 +164,28 @@ export function visibleBounds(points: Points, s: Summary) {
     if (py > maxY) maxY = py;
   }
   return minX === Infinity ? null : { minX, maxX, minY, maxY };
+}
+
+/**
+ * How many visible incidents each address has: counts[address id]. An
+ * incident with several offenses counts once. Address 0 ("none") is left at 0.
+ */
+export function incidentsByAddress(points: Points, s: Summary): Uint32Array {
+  let largest = 0;
+  for (let i = s.i0; i < s.i1; i++) if (points.address[i] > largest) largest = points.address[i];
+  const counts = new Uint32Array(largest + 1);
+  const { flags, address } = points;
+  let lastStart = -1;
+  for (let i = s.i0; i < s.i1; i++) {
+    if (s.style[i] === HIDDEN || address[i] === 0) continue;
+    // Rows of one report sit together; count the report at its first visible row.
+    let start = i;
+    while (start > 0 && flags[start] & FLAG_SAME_INCIDENT) start--;
+    if (start === lastStart) continue;
+    lastStart = start;
+    counts[address[i]]++;
+  }
+  return counts;
 }
 
 /**

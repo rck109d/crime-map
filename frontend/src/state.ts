@@ -1,6 +1,6 @@
 import { computed, effect, signal } from "@preact/signals";
 import { makeCalendar, type Calendar } from "./data/dates";
-import { summarize, type AreaKind, type Filters, type Summary } from "./data/filter";
+import { incidentsByAddress, summarize, type AreaKind, type Filters, type Summary } from "./data/filter";
 import { combineYears } from "./data/format";
 import { makeGeo, type Geo } from "./data/geo";
 import { loadManifest, loadSearchIndex, loadYear } from "./data/load";
@@ -43,6 +43,8 @@ export interface Selection {
   address?: number;
   /** Incidents ever recorded at that address, to explain an empty result. */
   known?: number;
+  /** The list this one was opened from, for the back arrow to return to. */
+  previous?: Selection;
 }
 
 export const PRESETS: { id: Exclude<Preset, "custom">; label: string }[] = [
@@ -167,6 +169,13 @@ export const summary = computed<Summary | null>(() => {
     npus: m.npus.length,
     zones: m.zones.length,
   });
+});
+
+/** Visible incidents per address id, for the "other incidents at this address" links. */
+export const addressCounts = computed<Uint32Array | null>(() => {
+  const p = points.value;
+  const s = summary.value;
+  return p && s ? incidentsByAddress(p, s) : null;
 });
 
 /** Radius actually used for the trend chart. */
