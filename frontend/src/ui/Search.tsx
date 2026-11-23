@@ -204,7 +204,7 @@ export function Search() {
       goTo(hit.label, true, () => {
         area.value = { kind: hit.areaKind, id: hit.id };
         areaKind.value = hit.areaKind;
-        mapApi.fitVisible();
+        mapApi.fitArea(hit.areaKind, hit.id);
       });
     } else if (hit.kind === "street") {
       const [minX, minY, maxX, maxY] = hit.box;

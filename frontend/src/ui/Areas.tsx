@@ -39,7 +39,7 @@ export function Areas() {
       return;
     }
     area.value = { kind, id };
-    mapApi.fitVisible();
+    mapApi.fitArea(kind, id);
   };
 
   return (

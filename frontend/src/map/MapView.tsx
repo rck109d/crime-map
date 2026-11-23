@@ -13,13 +13,15 @@ import {
 import "maplibre-gl/dist/maplibre-gl.css";
 import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?url";
 import { useEffect, useRef } from "preact/hooks";
-import { nearby, rowsAtAddress, visibleBounds } from "../data/filter";
+import { nearby, rowsAtAddress, visibleBounds, type AreaKind } from "../data/filter";
 import { mercatorX, mercatorY, metersPerPixel } from "../data/geo";
 import { binHex, classOf, hexAt, hexBreaks, hexRing, rowsInHex } from "../data/hexbin";
 import { NO_COORD } from "../data/types";
 import {
+  area,
   drawing,
   geo,
+  manifest,
   mapView,
   mode,
   points,
@@ -70,7 +72,7 @@ function install(m: MapLibreMap) {
   let labelStart = layers.length;
   while (labelStart > 0 && layers[labelStart - 1].type === "symbol") labelStart--;
   const before = layers[labelStart]?.id;
-  for (const id of ["hex", "area", "draft", "pick"]) m.addSource(id, { type: "geojson", data: empty });
+  for (const id of ["hex", "region", "area", "draft", "pick"]) m.addSource(id, { type: "geojson", data: empty });
 
   m.addLayer(
     {
@@ -86,6 +88,26 @@ function install(m: MapLibreMap) {
   );
   layer.setTheme(t);
   m.addLayer(layer, before);
+  // The neighborhood, NPU or zone being filtered to. Dashed, because the
+  // outline is only drawn around its incidents and is not an official boundary.
+  m.addLayer(
+    {
+      id: "region-fill",
+      type: "fill",
+      source: "region",
+      paint: { "fill-color": ink(), "fill-opacity": 0.05 },
+    },
+    before,
+  );
+  m.addLayer(
+    {
+      id: "region-line",
+      type: "line",
+      source: "region",
+      paint: { "line-color": ink(), "line-width": 1.5, "line-opacity": 0.7, "line-dasharray": [3, 2] },
+    },
+    before,
+  );
   m.addLayer({
     id: "area-fill",
     type: "fill",
@@ -134,6 +156,7 @@ function install(m: MapLibreMap) {
 
 function pushAll() {
   pushMode();
+  pushRegion();
   pushArea();
   pushDraft();
   pushSelection();
@@ -166,6 +189,33 @@ function rebuildHex() {
     })),
   });
   hexLegend.value = max > 0 ? { breaks, radius: hexRadius } : null;
+}
+
+/** Outline of an area as lng/lat corners, or null if it has none. */
+function areaRing(kind: AreaKind, id: number): LngLat[] | null {
+  const g = geo.value;
+  const flat = manifest.value?.outlines?.[kind]?.[id];
+  if (!g || !flat || flat.length < 2) return null;
+  const ring: LngLat[] = [];
+  for (let i = 0; i < flat.length; i += 2) ring.push([g.lng(flat[i]), g.lat(flat[i + 1])]);
+  return ring;
+}
+
+function pushRegion() {
+  const a = area.value;
+  const ring = a ? areaRing(a.kind, a.id) : null;
+  setData(
+    "region",
+    // An area whose incidents share one spot or one line has no shape to draw.
+    ring && ring.length >= 3
+      ? {
+          type: "FeatureCollection",
+          features: [
+            { type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [[...ring, ring[0]]] } },
+          ],
+        }
+      : empty,
+  );
 }
 
 function pushArea() {
@@ -299,7 +349,8 @@ function spotAt(lngLat: LngLat, reach: number): Selection | null {
 function frame(bounds: LngLatBoundsLike, maxZoom: number) {
   if (!map) return;
   const i = mapInsets.value;
-  const margins = { top: i.top + 24, bottom: i.bottom + 24, left: i.left + 24, right: i.right + 24 };
+  // Extra room at the top for the row of map buttons.
+  const margins = { top: i.top + 64, bottom: i.bottom + 24, left: i.left + 24, right: i.right + 24 };
   // If the chrome leaves too little room (a very short screen), frame it in the whole map instead.
   const padding = map.cameraForBounds(bounds, { padding: margins }) ? margins : 24;
   map.fitBounds(bounds, { padding, maxZoom, duration: 600 });
@@ -331,6 +382,23 @@ export const mapApi = {
         [g.lng(b.maxX), g.lat(b.maxY)],
       ],
       15.5,
+    );
+  },
+  /**
+   * Frame a neighborhood, NPU or zone by everything ever recorded in it, so
+   * the view is the same whatever the date range and filters currently show.
+   */
+  fitArea(kind: AreaKind, id: number) {
+    const ring = areaRing(kind, id);
+    if (!ring) return mapApi.fitVisible();
+    const lngs = ring.map((c) => c[0]);
+    const lats = ring.map((c) => c[1]);
+    frame(
+      [
+        [Math.min(...lngs), Math.min(...lats)],
+        [Math.max(...lngs), Math.max(...lats)],
+      ],
+      16,
     );
   },
   resetView() {
@@ -461,6 +529,11 @@ export function MapView() {
       effect(() => {
         polygon.value;
         pushArea();
+      }),
+      effect(() => {
+        area.value;
+        manifest.value;
+        pushRegion();
       }),
       effect(() => {
         drawing.value;

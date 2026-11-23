@@ -24,6 +24,7 @@ from collections import Counter
 from datetime import date, datetime
 from pathlib import Path
 
+from .hull import outlines
 from .search_index import build_search_index, clean_address, number_addresses
 from .store import read_csv
 
@@ -155,6 +156,11 @@ def build_site(data_dir: Path, out_dir: Path) -> dict:
     years: dict[int, dict] = {}
     # address -> (id, x, y) at its most recently reported position (for search)
     places: dict[str, tuple[int, int, int]] = {}
+    area_positions: dict[str, dict[int, set[tuple[int, int]]]] = {
+        "nhood": {},
+        "npu": {},
+        "zone": {},
+    }
     total = unmapped = 0
     last_report: datetime | None = None
     digest = hashlib.sha256()
@@ -213,9 +219,19 @@ def build_site(data_dir: Path, out_dir: Path) -> dict:
                         }
                     )
                 offense.append(offenses.id(name))
-                nhood.append(nhoods.id(row.get("NhoodName", "")))
-                npu.append(npus.id(row.get("NPU", "")))
-                zone.append(zones.id(row.get("Zone", "")))
+                area_ids = {
+                    "nhood": nhoods.id(row.get("NhoodName", "")),
+                    "npu": npus.id(row.get("NPU", "")),
+                    "zone": zones.id(row.get("Zone", "")),
+                }
+                nhood.append(area_ids["nhood"])
+                npu.append(area_ids["npu"])
+                zone.append(area_ids["zone"])
+                if x != NO_COORD:
+                    # Every position ever recorded in an area, to outline it (id 0 is "none").
+                    for kind, area_id in area_ids.items():
+                        if area_id:
+                            area_positions[kind].setdefault(area_id, set()).add((x, y))
                 incident = row.get("IncidentNumber", "")
                 this_report = (row.get("ReportDate", ""), incident)
                 flags.append(
@@ -295,6 +311,12 @@ def build_site(data_dir: Path, out_dir: Path) -> dict:
         "nhoods": nhoods.values,
         "npus": npus.values,
         "zones": zones.values,
+        # Per area, an outline around every incident position recorded in it.
+        "outlines": {
+            "nhood": outlines(area_positions["nhood"], len(nhoods.values)),
+            "npu": outlines(area_positions["npu"], len(npus.values)),
+            "zone": outlines(area_positions["zone"], len(zones.values)),
+        },
         "locationTypes": [title_case_code(v) for v in location_types.values],
         "years": [years[y] for y in sorted(years)],
     }

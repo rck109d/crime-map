@@ -38,6 +38,12 @@ export interface Manifest {
   nhoods: string[];
   npus: string[];
   zones: string[];
+  /**
+   * Per area id, an outline drawn around every incident position recorded in
+   * that area, as flat quantized [x0, y0, x1, y1, ...]; null where nothing is
+   * mapped. A sketch of where the area is, not its official boundary.
+   */
+  outlines?: { nhood: (number[] | null)[]; npu: (number[] | null)[]; zone: (number[] | null)[] };
   locationTypes: string[];
   years: YearInfo[];
 }

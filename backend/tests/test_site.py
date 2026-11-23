@@ -233,3 +233,40 @@ def test_rows_carry_their_address_id_and_search_points_at_the_latest_position(
     assert address_id == cols["address"][new_row]
     assert count == 2
     assert (x, y) == (cols["x"][new_row], cols["y"][new_row])  # where it is reported now
+
+
+def test_convex_hull_and_outlines():
+    from crimemap.hull import convex_hull, outlines
+
+    square = [(0, 0), (4, 0), (4, 4), (0, 4)]
+    inside = [(1, 1), (2, 3), (2, 2), (4, 2)]  # the last lies on an edge
+    assert convex_hull(square + inside + square) == [(0, 0), (4, 0), (4, 4), (0, 4)]
+    assert convex_hull([(5, 5)]) == [(5, 5)]
+    assert convex_hull([(0, 0), (2, 2), (1, 1)]) == [(0, 0), (2, 2)]  # all on one line
+    assert convex_hull([]) == []
+    # One flat outline per id; ids with nothing mapped get None.
+    assert outlines({1: set(square), 3: {(7, 8)}}, 4) == [
+        None,
+        [0, 0, 4, 0, 4, 4, 0, 4],
+        None,
+        [7, 8],
+    ]
+
+
+def test_manifest_outlines_cover_each_areas_incidents(tmp_path, layer, records):
+    manifest = build_site(archive(tmp_path, layer), tmp_path / "site")
+    _, cols = read_points(tmp_path / "site" / "points-2026.bin")
+    for kind, names in (("nhood", "nhoods"), ("npu", "npus"), ("zone", "zones")):
+        rings = manifest["outlines"][kind]
+        assert len(rings) == len(manifest[names])
+        assert rings[0] is None  # id 0 means no area was recorded
+        for area_id, ring in enumerate(rings):
+            rows = [
+                i for i, v in enumerate(cols[kind]) if v == area_id and cols["x"][i] != NO_COORD
+            ]
+            if area_id == 0 or not rows:
+                continue
+            xs, ys = ring[0::2], ring[1::2]
+            for i in rows:  # every incident of the area lies within its outline's extent
+                assert min(xs) <= cols["x"][i] <= max(xs)
+                assert min(ys) <= cols["y"][i] <= max(ys)
