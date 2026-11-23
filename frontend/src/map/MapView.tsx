@@ -288,9 +288,31 @@ function spotAt(lngLat: LngLat, reach: number): Selection | null {
   return { rows: nearby(p, s, cx, cy, rx, ry), kind: "spot", ring, at: lngLat };
 }
 
-function padding() {
+/**
+ * Frame a box in the part of the map the page chrome leaves visible.
+ *
+ * The margins are passed to this one move only. They must never be given to
+ * easeTo or jumpTo: there MapLibre keeps them as the map's standing padding,
+ * every later fit adds its own on top, and once the total exceeds the canvas
+ * the map refuses to move at all (with only a console warning).
+ */
+function frame(bounds: LngLatBoundsLike, maxZoom: number) {
+  if (!map) return;
   const i = mapInsets.value;
-  return { top: i.top + 24, bottom: i.bottom + 24, left: i.left + 24, right: i.right + 24 };
+  const margins = { top: i.top + 24, bottom: i.bottom + 24, left: i.left + 24, right: i.right + 24 };
+  // If the chrome leaves too little room (a very short screen), frame it in the whole map instead.
+  const padding = map.cameraForBounds(bounds, { padding: margins }) ? margins : 24;
+  map.fitBounds(bounds, { padding, maxZoom, duration: 600 });
+}
+
+/**
+ * Where a spot should sit, relative to the middle of the map, to be centred
+ * in the part the page chrome leaves visible. `bottom` overrides the measured
+ * bottom inset, for when the panel is about to change height.
+ */
+function visibleCentre(bottom = mapInsets.value.bottom): [number, number] {
+  const i = mapInsets.value;
+  return [(i.left - i.right) / 2, (i.top - bottom) / 2];
 }
 
 /** Controls the rest of the UI uses to move the map. */
@@ -303,23 +325,25 @@ export const mapApi = {
     if (!map || !p || !s || !g) return;
     const b = visibleBounds(p, s);
     if (!b) return;
-    const bounds: LngLatBoundsLike = [
-      [g.lng(b.minX), g.lat(b.minY)],
-      [g.lng(b.maxX), g.lat(b.maxY)],
-    ];
-    map.fitBounds(bounds, { padding: padding(), maxZoom: 15.5, duration: 600 });
+    frame(
+      [
+        [g.lng(b.minX), g.lat(b.minY)],
+        [g.lng(b.maxX), g.lat(b.maxY)],
+      ],
+      15.5,
+    );
   },
   resetView() {
     map?.easeTo({ center: ATLANTA, zoom: 10.4, bearing: 0, pitch: 0, duration: 600 });
   },
   /** Frame a box given by its corners, e.g. the extent of a street. */
   fitBox(west: number, south: number, east: number, north: number) {
-    map?.fitBounds(
+    frame(
       [
         [west, south],
         [east, north],
       ],
-      { padding: padding(), maxZoom: 16.5, duration: 600 },
+      16.5,
     );
   },
   /**
@@ -352,7 +376,7 @@ export const mapApi = {
     const i = mapInsets.value;
     const box = map.getContainer().getBoundingClientRect();
     if (y > box.height - i.bottom - 40 || y < i.top + 20 || x < i.left + 20 || x > box.width - i.right - 20) {
-      map.easeTo({ center: at, padding: { top: i.top, bottom: i.bottom, left: i.left, right: i.right }, duration: 400 });
+      map.easeTo({ center: at, offset: visibleCentre(), duration: 400 });
     }
   },
 };
@@ -366,7 +390,7 @@ function flyTo(at: LngLat) {
   map.easeTo({
     center: at,
     zoom: Math.max(map.getZoom(), 16.5),
-    padding: { top: i.top, bottom, left: i.left, right: i.right },
+    offset: visibleCentre(bottom),
     duration: 600,
   });
 }
