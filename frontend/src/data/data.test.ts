@@ -8,6 +8,7 @@ import { combineYears, decodePoints, isGzip, locate, lowerBoundDay } from "./for
 import { makeGeo, pointInRing } from "./geo";
 import { binHex, classOf, hexAt, hexBreaks, hexRing, rowsInHex } from "./hexbin";
 import { groupByIncident, incidentRun } from "./incidents";
+import { nominatimUrl, parseNominatim, parsePhoton, photonUrl } from "./places";
 import { displayName, searchAreas, searchPlaces, tokenize, type SearchIndex } from "./search";
 import { gaussianSmooth, niceTicks } from "./smooth";
 import {
@@ -433,5 +434,62 @@ describe("search", () => {
     expect(displayName("PEACHTREE ST NE / 10TH ST NE")).toBe("Peachtree St NE / 10th St NE");
     expect(displayName("3393 PEACHTREE RD NE")).toBe("3393 Peachtree Rd NE");
     expect(displayName("I-75 NB EXPY NW")).toBe("I-75 NB Expy NW");
+  });
+});
+
+describe("outside place search", () => {
+  const box = { west: -84.75, south: 33.5, east: -84.15, north: 34.0 };
+
+  it("builds requests limited to the map's area", () => {
+    const photon = new URL(photonUrl("piedmont park", box));
+    expect(photon.origin + photon.pathname).toBe("https://photon.komoot.io/api/");
+    expect(photon.searchParams.get("q")).toBe("piedmont park");
+    expect(photon.searchParams.get("bbox")).toBe("-84.75,33.5,-84.15,34");
+    const nominatim = new URL(nominatimUrl("lenox & 5th", box));
+    expect(nominatim.origin + nominatim.pathname).toBe("https://nominatim.openstreetmap.org/search");
+    expect(nominatim.searchParams.get("q")).toBe("lenox & 5th");
+    expect(nominatim.searchParams.get("viewbox")).toBe("-84.75,34,-84.15,33.5");
+    expect(nominatim.searchParams.get("bounded")).toBe("1");
+  });
+
+  it("reads Photon results and drops ones outside the map or without a name", () => {
+    const body = {
+      features: [
+        {
+          geometry: { coordinates: [-84.3718862, 33.7890478] },
+          properties: { name: "Piedmont Park", osm_value: "park", street: "Monroe Drive NE", city: "Atlanta" },
+        },
+        { geometry: { coordinates: [-84.38, 33.78] }, properties: { street: "10th Street NE", housenumber: "250", osm_value: "yes" } },
+        { geometry: { coordinates: [-83.0, 33.9] }, properties: { name: "Too far east" } },
+        { geometry: { coordinates: [-84.3, 33.7] }, properties: {} },
+        { properties: { name: "No position" } },
+      ],
+    };
+    expect(parsePhoton(body, box)).toEqual([
+      { label: "Piedmont Park", note: "Park · Monroe Drive NE · Atlanta", lng: -84.3718862, lat: 33.7890478 },
+      { label: "250 10th Street NE", note: "", lng: -84.38, lat: 33.78 },
+    ]);
+    expect(parsePhoton(null, box)).toEqual([]);
+    expect(parsePhoton({ features: "nope" }, box)).toEqual([]);
+  });
+
+  it("reads Nominatim results", () => {
+    const body = [
+      {
+        name: "Piedmont Park",
+        display_name: "Piedmont Park, Monroe Drive Northeast, Midtown, Atlanta, Fulton County, Georgia, 30309, United States",
+        type: "park",
+        lat: "33.7890478",
+        lon: "-84.3718862",
+      },
+      { name: "", display_name: "Unnamed Road, Atlanta", type: "swimming_pool", lat: "33.7", lon: "-84.3" },
+      { name: "Elsewhere", display_name: "Elsewhere", lat: "40.0", lon: "-74.0" },
+      { name: "Broken", lat: "x", lon: "y" },
+    ];
+    expect(parseNominatim(body, box)).toEqual([
+      { label: "Piedmont Park", note: "Park · Monroe Drive Northeast, Midtown", lng: -84.3718862, lat: 33.7890478 },
+      { label: "Unnamed Road", note: "Swimming pool · Atlanta", lng: -84.3, lat: 33.7 },
+    ]);
+    expect(parseNominatim({ error: "blocked" }, box)).toEqual([]);
   });
 });

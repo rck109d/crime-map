@@ -108,6 +108,11 @@ export function About({ open, onClose }: { open: boolean; onClose: () => void })
             recorded for crimes against persons only.
           </li>
           <li>Dates filter by when an incident was reported, which can be days or months after it happened.</li>
+          <li>
+            Search has three tabs. Local runs on your device and sends nothing anywhere. Photon and Nominatim find
+            businesses and landmarks by sending what you type to those services (Photon as you type, Nominatim only
+            when you press Search); a place result lists the incidents within 100 m of it.
+          </li>
         </ul>
         <p class="fine">
           Basemap © <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a>,{" "}

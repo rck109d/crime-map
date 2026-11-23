@@ -13,6 +13,8 @@
   --wash: rgba(11, 11, 11, 0.05);
   --accent: #256abf;
   --error: #b42318;
+  --private: #0a7a0a;
+  --shared: #b45f06;
   --on-accent: #ffffff;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.08), 0 6px 20px rgba(0, 0, 0, 0.1);
   --radius: 12px;
@@ -35,6 +37,8 @@
   --wash: rgba(255, 255, 255, 0.07);
   --accent: #6da7ec;
   --error: #ff8a7a;
+  --private: #0ca30c;
+  --shared: #e0902b;
   --on-accent: #0b0b0b;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 6px 20px rgba(0, 0, 0, 0.45);
 }
@@ -988,13 +992,73 @@ tbody tr:last-child > * {
     opacity: 0;
   }
 }
+/* Top row: which search to use, and the close button. */
+.search-top {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  padding: calc(env(safe-area-inset-top) + 4px) 8px 0 8px;
+  border-bottom: 1px solid var(--grid);
+}
+.search-tabs {
+  flex: 1;
+  display: flex;
+  gap: 2px;
+  min-width: 0;
+}
+.search-tabs button {
+  flex: 1;
+  min-height: 42px;
+  padding: 0 6px;
+  font-weight: 550;
+  color: var(--ink-2);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  white-space: nowrap;
+}
+.search-tabs button[aria-selected="true"] {
+  color: var(--ink);
+  border-bottom-color: var(--ink);
+}
+/* One line on what this search finds and where the typing goes. */
+.search-about {
+  padding: 8px 16px 0;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.search-about strong {
+  color: var(--ink);
+  font-weight: 650;
+}
+.search-private strong::before,
+.search-shared strong::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--private);
+}
+.search-shared strong::before {
+  background: none;
+  box-shadow: inset 0 0 0 2px var(--shared);
+}
 .search-bar {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: calc(env(safe-area-inset-top) + 8px) 8px 8px 16px;
+  padding: 6px 8px 6px 16px;
   border-bottom: 1px solid var(--grid);
   color: var(--ink-2);
+}
+.search-go {
+  min-height: 36px;
+  padding: 0 14px;
+  flex: none;
+}
+.search-credit {
+  margin-top: 14px;
 }
 .search-bar input {
   flex: 1;

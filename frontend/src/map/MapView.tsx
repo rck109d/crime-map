@@ -41,6 +41,8 @@ const HEX_PIXELS = 15;
 const TAP_PIXELS = 16;
 /** Radius of the circle that marks a searched address on the map. */
 const MARKER_METERS = 15;
+/** A place from an outside search has no APD address, so incidents near it are shown instead. */
+export const PLACE_METERS = 100;
 
 /** Legend data for the density layer. */
 export const hexLegend = signal<{ breaks: number[]; radius: number } | null>(null);
@@ -334,15 +336,14 @@ export const mapApi = {
     const marker = spotAt(at, MARKER_METERS);
     if (!marker) return;
     selection.value = { ...marker, kind: "address", rows: rowsAtAddress(p, s, address), address, label, known };
-    const i = mapInsets.value;
-    // On a phone the panel is about to rise to half height; aim above that.
-    const bottom = i.bottom > 0 ? Math.max(i.bottom, innerHeight * 0.56) : 0;
-    map.easeTo({
-      center: at,
-      zoom: Math.max(map.getZoom(), 16.5),
-      padding: { top: i.top, bottom, left: i.left, right: i.right },
-      duration: 600,
-    });
+    flyTo(at);
+  },
+  /** Go to a place found by an outside search and list the incidents around it. */
+  showPlace(at: LngLat, label: string) {
+    const nearbyRows = spotAt(at, PLACE_METERS);
+    if (!map || !nearbyRows) return;
+    selection.value = { ...nearbyRows, kind: "place", label };
+    flyTo(at);
   },
   /** Keep a picked spot clear of the bottom sheet. */
   reveal(at: LngLat) {
@@ -355,6 +356,20 @@ export const mapApi = {
     }
   },
 };
+
+/** Move to a searched spot, close enough to see what is there. */
+function flyTo(at: LngLat) {
+  if (!map) return;
+  const i = mapInsets.value;
+  // On a phone the panel is about to rise to half height; aim above that.
+  const bottom = i.bottom > 0 ? Math.max(i.bottom, innerHeight * 0.56) : 0;
+  map.easeTo({
+    center: at,
+    zoom: Math.max(map.getZoom(), 16.5),
+    padding: { top: i.top, bottom, left: i.left, right: i.right },
+    duration: 600,
+  });
+}
 
 export function MapView() {
   const container = useRef<HTMLDivElement>(null);
