@@ -3,7 +3,8 @@ import { loadSearchIndex } from "../data/load";
 import { nominatimUrl, parseNominatim, parsePhoton, photonUrl, type PlaceHit } from "../data/places";
 import { displayName, searchAreas, searchPlaces, type Hit, type SearchIndex } from "../data/search";
 import { mapApi } from "../map/MapView";
-import { area, areaKind, geo, manifest } from "../state";
+import { area, areaKind, geo, manifest, polygon } from "../state";
+import { areaLabel } from "./FilterBar";
 import { fmt } from "./format";
 import { CloseIcon, SearchIcon } from "./icons";
 
@@ -52,6 +53,16 @@ interface Remote {
 }
 const NOTHING: Remote = { state: "idle", query: "", hits: [] };
 
+/** A picked result waiting on the question of whether to drop location filters first. */
+interface Pending {
+  title: string;
+  /** The active location filters, as they would be named in a sentence. */
+  filters: string[];
+  /** Whether removing filters should include the area filter. */
+  dropArea: boolean;
+  go: () => void;
+}
+
 function readMode(): Mode {
   try {
     const saved = localStorage.getItem("searchMode");
@@ -74,6 +85,7 @@ export function Search() {
   const dialog = useRef<HTMLDialogElement>(null);
   const input = useRef<HTMLInputElement>(null);
   const request = useRef<AbortController | null>(null);
+  const [pending, setPending] = useState<Pending | null>(null);
   const lastNominatim = useRef(0);
   const shownMode = useRef<Mode>(mode);
   const info = MODES.find((x) => x.id === mode)!;
@@ -144,6 +156,36 @@ export function Search() {
     request.current?.abort();
     setOpen(false);
     setQuery("");
+    setPending(null);
+  };
+
+  /**
+   * Go to a search result. A location filter left on would hide everything
+   * outside it, so the place searched for could look empty; when one is
+   * active, ask first whether to remove it.
+   */
+  const goTo = (title: string, replacesArea: boolean, go: () => void) => {
+    const filters: string[] = [];
+    // Picking a neighborhood replaces the area filter anyway, so that one is not asked about.
+    if (area.value && !replacesArea) filters.push(areaLabel());
+    if (polygon.value) filters.push("the area you drew");
+    if (filters.length === 0) {
+      close();
+      go();
+      return;
+    }
+    setPending({ title, filters, dropArea: !replacesArea, go });
+  };
+
+  const settle = (remove: boolean) => {
+    if (!pending) return;
+    const { go, dropArea } = pending;
+    if (remove) {
+      if (dropArea) area.value = null;
+      polygon.value = null;
+    }
+    close();
+    go();
   };
 
   const choose = (next: Mode) => {
@@ -157,23 +199,24 @@ export function Search() {
   };
 
   const pick = (hit: Hit) => {
-    close();
     if (!g) return;
     if (hit.kind === "area") {
-      area.value = { kind: hit.areaKind, id: hit.id };
-      areaKind.value = hit.areaKind;
-      mapApi.fitVisible();
+      goTo(hit.label, true, () => {
+        area.value = { kind: hit.areaKind, id: hit.id };
+        areaKind.value = hit.areaKind;
+        mapApi.fitVisible();
+      });
     } else if (hit.kind === "street") {
       const [minX, minY, maxX, maxY] = hit.box;
-      mapApi.fitBox(g.lng(minX), g.lat(minY), g.lng(maxX), g.lat(maxY));
+      goTo(displayName(hit.label), false, () => mapApi.fitBox(g.lng(minX), g.lat(minY), g.lng(maxX), g.lat(maxY)));
     } else {
-      mapApi.showAddress([g.lng(hit.x), g.lat(hit.y)], hit.id, displayName(hit.label), hit.count);
+      const label = displayName(hit.label);
+      goTo(label, false, () => mapApi.showAddress([g.lng(hit.x), g.lat(hit.y)], hit.id, label, hit.count));
     }
   };
 
   const pickPlace = (hit: PlaceHit) => {
-    close();
-    mapApi.showPlace([hit.lng, hit.lat], hit.label);
+    goTo(hit.label, false, () => mapApi.showPlace([hit.lng, hit.lat], hit.label));
   };
 
   const submit = () => {
@@ -203,7 +246,30 @@ export function Search() {
           if (e.target === dialog.current) close(); // click on the backdrop
         }}
       >
-        {open && (
+        {open && pending && (
+          <div class="dialog-body search-confirm" role="alertdialog" aria-labelledby="search-confirm-title">
+            <h2 id="search-confirm-title">
+              Remove {pending.filters.length > 1 ? "your location filters" : "your location filter"}?
+            </h2>
+            <p>
+              The map is limited to <strong>{pending.filters.join(" and ")}</strong>. If that stays on, only incidents
+              inside {pending.filters.length > 1 ? "them" : "it"} will show when you go to{" "}
+              <strong>{pending.title}</strong>.
+            </p>
+            <div class="button-row">
+              <button type="button" class="button" autofocus onClick={() => settle(true)}>
+                Remove and go
+              </button>
+              <button type="button" class="button button-quiet" onClick={() => settle(false)}>
+                Keep and go
+              </button>
+              <button type="button" class="button button-quiet" onClick={() => setPending(null)}>
+                Back
+              </button>
+            </div>
+          </div>
+        )}
+        {open && !pending && (
           <form
             class="dialog-body"
             role="search"

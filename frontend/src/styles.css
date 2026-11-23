@@ -1060,6 +1060,20 @@ tbody tr:last-child > * {
 .search-credit {
   margin-top: 14px;
 }
+.search-confirm {
+  padding: calc(env(safe-area-inset-top) + 16px) 18px 18px;
+  gap: 8px;
+}
+.search-confirm h2 {
+  font-size: 17px;
+  font-weight: 650;
+}
+.search-confirm p {
+  color: var(--ink-2);
+}
+.search-confirm strong {
+  color: var(--ink);
+}
 .search-bar input {
   flex: 1;
   min-width: 0;
