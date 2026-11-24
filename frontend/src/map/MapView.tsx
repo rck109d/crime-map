@@ -599,7 +599,9 @@ export function MapView() {
         const next = theme.value;
         if (next !== shownTheme) {
           shownTheme = next;
-          m.setStyle(THEMES[next].basemap); // "style.load" re-installs our layers
+          // A full reload rather than a diff: both themes share one basemap, and
+          // "style.load" then re-installs our layers and the theme's colours.
+          m.setStyle(THEMES[next].basemap, { diff: false });
         }
       }),
     ];
