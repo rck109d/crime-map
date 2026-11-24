@@ -12,6 +12,7 @@ from pathlib import Path
 
 from . import changes as changelog
 from .arcgis import DEFAULT_LAYER_URL, ArcGISError, Layer, range_where, utc_literal
+from .historical import load_historical
 from .records import ATLANTA, SANE_EARLIEST, normalize
 from .site import build_site
 from .store import Archive, write_source_snapshot
@@ -90,6 +91,13 @@ def build_parser() -> argparse.ArgumentParser:
         default=REPO_ROOT / "frontend" / "public" / "data",
         help="output directory (default frontend/public/data)",
     )
+    historical = sub.add_parser(
+        "load-historical",
+        help="fetch APD's 1997-2020 layers into data/historical/ (one-off)",
+    )
+    historical.add_argument(
+        "--data-dir", type=Path, default=Path(os.environ.get("CRIMEMAP_DATA_DIR", DEFAULT_DATA_DIR))
+    )
     return parser
 
 
@@ -101,6 +109,13 @@ def main(argv: list[str] | None = None) -> int:
         print(
             f"Built site data for {manifest['count']} incidents through {manifest['through']} "
             f"({size / 1e6:.1f} MB in {args.out})"
+        )
+        return 0
+    if args.command == "load-historical":
+        counts = load_historical(args.data_dir)
+        print(
+            f"Loaded {counts['rows']} historical records into {counts['months']} files "
+            f"({counts['duplicates']} duplicates dropped, {counts['unmapped']} without an offense)"
         )
         return 0
     return load(args)

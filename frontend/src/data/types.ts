@@ -22,6 +22,14 @@ export interface YearInfo {
   months: MonthInfo[];
 }
 
+/** A span of report dates one dataset covers (ISO dates, inclusive). */
+export interface Coverage {
+  /** "historical": APD's pre-NIBRS records, 1997-2020. "nibrs": 2021 on. */
+  source: string;
+  from: string;
+  to: string;
+}
+
 export interface Manifest {
   version: number;
   build: string;
@@ -46,6 +54,8 @@ export interface Manifest {
   outlines?: { nhood: (number[] | null)[]; npu: (number[] | null)[]; zone: (number[] | null)[] };
   locationTypes: string[];
   years: YearInfo[];
+  /** Report-date spans with data, ascending; days between them have none at all. */
+  coverage?: Coverage[];
 }
 
 /** Column-oriented incident table; row i is one offense record. */
@@ -53,7 +63,7 @@ export interface PointColumns {
   count: number;
   /** Report date, days since Manifest.epoch (Atlanta local date). */
   day: Uint16Array;
-  /** Report time, minutes after local midnight. */
+  /** Report time, minutes after local midnight, or UNKNOWN_MINUTE (historical records). */
   minute: Uint16Array;
   /** Quantized longitude / latitude; NO_COORD when unmapped. */
   x: Uint16Array;
@@ -103,10 +113,13 @@ export interface MonthDetail {
   beat: string[];
   /** Victim count; APD records it for crimes against persons only, so usually "". */
   vic: string[];
+  /** Historical months only: how APD recorded the offense, e.g. "ROB-STREET-GUN" or "ROBBERY (1204)". */
+  type?: string[];
 }
 
 export const NO_COORD = 0xffff;
 export const UNKNOWN = 255;
+export const UNKNOWN_MINUTE = 0xffff;
 export const FLAG_FIREARM = 1;
 export const FLAG_FAMILY = 2;
 export const FLAG_PART1 = 4;

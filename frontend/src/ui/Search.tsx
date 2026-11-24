@@ -353,7 +353,7 @@ export function Search() {
                   {!text && (
                     <p class="fine">
                       Try a street (“Ponce de Leon”), an address (“3393 Peachtree”), an intersection (“Peachtree 10th”)
-                      or a neighborhood. Incident counts are for all dates since 2021.
+                      or a neighborhood. Incident counts are for all dates in the data.
                     </p>
                   )}
                 </>

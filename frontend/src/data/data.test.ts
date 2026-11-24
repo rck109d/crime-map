@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { gunzipSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
 import { dateTicks, formatMinute, formatRange, makeCalendar } from "./dates";
+import { coverageMask, coverageSpans, gaps, overlaps } from "./coverage";
 import { toCsv, toKml, type ExportRow } from "./export";
 import { HIDDEN, incidentsByAddress, nearby, rowsAtAddress, summarize, visibleBounds, type Filters } from "./filter";
 import { combineYears, decodePoints, isGzip, locate, lowerBoundDay } from "./format";
@@ -50,7 +51,7 @@ function encode(cols: PointColumns): ArrayBuffer {
   const buf = new ArrayBuffer(12 + n * 19);
   const view = new DataView(buf);
   [0x43, 0x4d, 0x41, 0x50].forEach((b, i) => view.setUint8(i, b));
-  view.setUint16(4, 2, true);
+  view.setUint16(4, 3, true);
   view.setUint32(8, n, true);
   let o = 12;
   for (const c of [cols.day, cols.minute, cols.x, cols.y, cols.nhood, cols.addrLo]) {
@@ -154,6 +155,7 @@ describe("points format", () => {
       const month = year.months[0];
       const detail = JSON.parse(readFileSync(new URL(`detail/${month.month}.json`, built), "utf8"));
       expect(detail.inc.length).toBe(month.count);
+      if (detail.type) expect(detail.type.length).toBe(month.count);
       total += cols.count;
     }
     expect(total).toBe(real.count);
@@ -274,10 +276,57 @@ describe("smoothing", () => {
   it("returns the input when the radius is zero", () => {
     expect([...gaussianSmooth([1, 2, 3], 0)]).toEqual([1, 2, 3]);
   });
+  it("skips days with no data instead of averaging them in as zero", () => {
+    const covered = [1, 1, 1, 0, 0, 1, 1, 1];
+    const out = gaussianSmooth([4, 4, 4, 0, 0, 4, 4, 4], 2, covered);
+    expect(Number.isNaN(out[3]) && Number.isNaN(out[4])).toBe(true);
+    for (const i of [0, 1, 2, 5, 6, 7]) expect(out[i]).toBeCloseTo(4, 12);
+    expect([...gaussianSmooth([1, 2, 3], 0, [1, 0, 1])]).toEqual([1, NaN, 3]);
+  });
   it("picks round axis ticks", () => {
     expect(niceTicks(87)).toEqual([0, 25, 50, 75, 100]);
     expect(niceTicks(3)).toEqual([0, 1, 2, 3]);
     expect(niceTicks(0)).toEqual([0, 1]);
+  });
+});
+
+describe("coverage", () => {
+  const cal = makeCalendar("2004-01-01");
+  const spans = coverageSpans(
+    {
+      epoch: "2004-01-01",
+      through: "2021-01-10",
+      coverage: [
+        { source: "historical", from: "2004-01-01", to: "2004-01-05" },
+        { source: "nibrs", from: "2004-01-09", to: "2004-01-10" },
+      ],
+    } as Manifest,
+    cal,
+  );
+  it("turns the manifest's date spans into day indexes", () => {
+    expect(spans).toEqual([
+      { source: "historical", d0: 0, d1: 4 },
+      { source: "nibrs", d0: 8, d1: 9 },
+    ]);
+  });
+  it("marks the days of a range that have data", () => {
+    expect([...coverageMask(spans, 3, 10)]).toEqual([1, 1, 0, 0, 0, 1, 1, 0]);
+  });
+  it("lists the gaps inside a range, including after the last span", () => {
+    expect(gaps(spans, 0, 9)).toEqual([{ d0: 5, d1: 7 }]);
+    expect(gaps(spans, 6, 12)).toEqual([
+      { d0: 6, d1: 7 },
+      { d0: 10, d1: 12 },
+    ]);
+    expect(gaps(spans, 8, 9)).toEqual([]);
+  });
+  it("tells whether a range reaches a dataset", () => {
+    expect(overlaps(spans, "historical", 4, 20)).toBe(true);
+    expect(overlaps(spans, "historical", 5, 20)).toBe(false);
+  });
+  it("treats an older manifest without coverage as one span", () => {
+    const old = coverageSpans({ epoch: "2004-01-01", through: "2004-01-31" } as Manifest, cal);
+    expect(old).toEqual([{ source: "nibrs", d0: 0, d1: 30 }]);
   });
 });
 

@@ -4,7 +4,7 @@ const MAGIC = [0x43, 0x4d, 0x41, 0x50]; // "CMAP"
 const HEADER_BYTES = 12;
 const U16_COLUMNS = ["day", "minute", "x", "y", "nhood", "addrLo"] as const;
 const U8_COLUMNS = ["offense", "npu", "zone", "flags", "occHour", "occDow", "addrHi"] as const;
-const FORMAT_VERSION = 2;
+const FORMAT_VERSION = 3;
 
 /** Decode one (already decompressed) points-YYYY.bin file. */
 export function decodePoints(buffer: ArrayBuffer): PointColumns {

@@ -72,12 +72,12 @@ export function About({ open, onClose }: { open: boolean; onClose: () => void })
         <h3>About the data</h3>
         {m && cal && (
           <p>
-            {fmt(m.count)} offense records reported to the Atlanta Police Department from January 2021 through{" "}
-            {formatLong(cal.date(lastDay.value))}, as published on the{" "}
+            {fmt(m.count)} offense records reported to the Atlanta Police Department: from January 2021 through{" "}
+            {formatLong(cal.date(lastDay.value))} as published on the{" "}
             <a href="https://opendata.atlantapd.org/" target="_blank" rel="noopener">
               APD Open Data Portal
             </a>
-            . This site keeps a daily copy in a{" "}
+            , and from 1997 through 2020 from APD's historical crime data. This site keeps a daily copy in a{" "}
             <a href={REPO} target="_blank" rel="noopener">
               public archive
             </a>{" "}
@@ -88,6 +88,11 @@ export function About({ open, onClose }: { open: boolean; onClose: () => void })
           <li>
             APD reclassifies and removes reports after publishing them, so recent counts change. The data cannot be
             used to recreate an official crime report.
+          </li>
+          <li>
+            The records from 1997 through 2020 use APD's older crime types and codes, matched here to the nearest
+            NIBRS offense. They cover only the FBI's index crimes (Part I): no drug, fraud, vandalism or other Part
+            II offenses, so totals jump in 2021. They have a report date but no report time.
           </li>
           <li>
             Each record is one offense. An incident involving several offenses appears once for each, so counts are

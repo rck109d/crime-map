@@ -3,7 +3,7 @@ import { toCsv, toKml, type ExportRow } from "./data/export";
 import { HIDDEN } from "./data/filter";
 import { locate } from "./data/format";
 import { loadDetail } from "./data/load";
-import { FLAG_FAMILY, FLAG_FIREARM, FLAG_PART1, NO_COORD, type MonthDetail } from "./data/types";
+import { FLAG_FAMILY, FLAG_FIREARM, FLAG_PART1, NO_COORD, UNKNOWN_MINUTE, type MonthDetail } from "./data/types";
 import { applied, calendar, geo, manifest, points, summary } from "./state";
 
 /** Above this, the full archive on GitHub is the better download. */
@@ -43,7 +43,10 @@ async function collect(onProgress: (done: number, total: number) => void): Promi
     return {
       incident: d.inc[w.row],
       reportNumber: d.rep?.[w.row] ? `${d.inc[w.row]}-${d.rep[w.row]}` : d.inc[w.row],
-      reported: `${cal.iso(p.day[i])} ${pad(Math.floor(p.minute[i] / 60))}:${pad(p.minute[i] % 60)}`,
+      reported:
+        p.minute[i] === UNKNOWN_MINUTE
+          ? cal.iso(p.day[i])
+          : `${cal.iso(p.day[i])} ${pad(Math.floor(p.minute[i] / 60))}:${pad(p.minute[i] % 60)}`,
       occurredFrom: d.from[w.row].replace("T", " "),
       occurredTo: d.to[w.row].replace("T", " "),
       offense: offense.name,

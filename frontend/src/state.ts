@@ -1,4 +1,5 @@
 import { computed, effect, signal } from "@preact/signals";
+import { coverageSpans, type Span } from "./data/coverage";
 import { makeCalendar, type Calendar } from "./data/dates";
 import { incidentsByAddress, summarize, type AreaKind, type Filters, type Summary } from "./data/filter";
 import { combineYears } from "./data/format";
@@ -69,6 +70,10 @@ export const calendar = computed<Calendar | null>(() =>
   manifest.value ? makeCalendar(manifest.value.epoch) : null,
 );
 export const geo = computed<Geo | null>(() => (manifest.value ? makeGeo(manifest.value) : null));
+/** Report-date spans the data covers, as day indexes. */
+export const spans = computed<Span[]>(() =>
+  manifest.value && calendar.value ? coverageSpans(manifest.value, calendar.value) : [],
+);
 export const lastDay = computed(() =>
   manifest.value && calendar.value ? calendar.value.dayOf(manifest.value.through) : 0,
 );

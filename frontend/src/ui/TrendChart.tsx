@@ -1,8 +1,9 @@
 import { useMemo, useState } from "preact/hooks";
-import { dateTicks, formatLong, formatMonth, formatShort, type Calendar } from "../data/dates";
+import { coverageMask, gaps } from "../data/coverage";
+import { dateTicks, formatLong, formatMonth, formatRange, formatShort, type Calendar } from "../data/dates";
 import { gaussianSmooth, niceTicks } from "../data/smooth";
 import { GROUP_COUNT } from "../data/types";
-import { applied, calendar, groupsOn, smoothing, smoothingRadius, summary, theme } from "../state";
+import { applied, calendar, groupsOn, smoothing, smoothingRadius, spans, summary, theme } from "../state";
 import { GROUP_LABELS, GROUP_ORDER, THEMES } from "../theme";
 import { fmt, fmt1, fmtCompact } from "./format";
 import { useWidth } from "./hooks";
@@ -35,6 +36,9 @@ export function TrendChart() {
   const [hover, setHover] = useState<number | null>(null);
   const [asTable, setAsTable] = useState(false);
   const days = range.d1 - range.d0 + 1;
+  // Days with no data at all (not zero incidents): left blank, not drawn as zero.
+  const covered = useMemo(() => coverageMask(spans.value, range.d0, range.d1), [spans.value, range.d0, range.d1]);
+  const holes = useMemo(() => gaps(spans.value, range.d0, range.d1), [spans.value, range.d0, range.d1]);
 
   const series = useMemo<Series[]>(() => {
     if (!s || s.daily.length !== days * GROUP_COUNT) return [];
@@ -45,10 +49,10 @@ export function TrendChart() {
       const raw = new Float64Array(days);
       let sum = 0;
       for (let d = 0; d < days; d++) sum += raw[d] = s.daily[d * GROUP_COUNT + g];
-      if (sum > 0) out.push({ group: g, raw, values: gaussianSmooth(raw, radius) });
+      if (sum > 0) out.push({ group: g, raw, values: gaussianSmooth(raw, radius, holes.length ? covered : undefined) });
     }
     return out;
-  }, [s, days, radius, on]);
+  }, [s, days, radius, on, covered, holes]);
 
   if (!s || !cal) return null;
 
@@ -76,7 +80,7 @@ export function TrendChart() {
   if (series.length === 0) {
     body = <p class="empty">No incidents match these filters.</p>;
   } else if (asTable) {
-    body = <TrendTable series={series} d0={range.d0} days={days} cal={cal} />;
+    body = <TrendTable series={series} d0={range.d0} days={days} cal={cal} covered={covered} />;
   } else if (days < 3) {
     body = <p class="empty">Choose a range of at least three days to see a trend.</p>;
   } else {
@@ -92,6 +96,7 @@ export function TrendChart() {
 
     // End labels: keep the legend for any that would collide rather than nudging them apart.
     const ends = series
+      .filter((sr) => !Number.isNaN(sr.values[days - 1]))
       .map((sr) => ({ group: sr.group, y: y(sr.values[days - 1]) }))
       .sort((a, b) => a.y - b.y);
     const labelled = new Set<number>();
@@ -130,6 +135,20 @@ export function TrendChart() {
               setHover((h) => Math.min(days - 1, Math.max(0, (h ?? days - 1) + step)));
             }}
           >
+            {holes.map((h) => {
+              const left = x(Math.max(0, h.d0 - range.d0 - 0.5));
+              const right = x(Math.min(days - 1, h.d1 - range.d0 + 0.5));
+              return (
+                <g key={h.d0}>
+                  <rect class="gap" x={left} y={PAD.top} width={Math.max(1, right - left)} height={plotH} />
+                  {right - left > 54 && (
+                    <text class="gap-label" x={(left + right) / 2} y={PAD.top + 16} text-anchor="middle">
+                      No data
+                    </text>
+                  )}
+                </g>
+              );
+            })}
             {yTicks.map((t) => (
               <g key={t}>
                 <line class={t === 0 ? "axis" : "grid"} x1={PAD.left} x2={PAD.left + plotW} y1={y(t)} y2={y(t)} />
@@ -144,8 +163,18 @@ export function TrendChart() {
               </text>
             ))}
             {series.map((sr) => {
+              // A gap in the data breaks the line rather than dropping it to zero.
               let d = "";
-              for (let i = 0; i < days; i++) d += `${i ? "L" : "M"}${x(i).toFixed(1)} ${y(sr.values[i]).toFixed(1)}`;
+              let pen = false;
+              for (let i = 0; i < days; i++) {
+                const v = sr.values[i];
+                if (Number.isNaN(v)) {
+                  pen = false;
+                  continue;
+                }
+                d += `${pen ? "L" : "M"}${x(i).toFixed(1)} ${y(v).toFixed(1)}`;
+                pen = true;
+              }
               return <path key={sr.group} d={d} fill="none" stroke={colors[sr.group]} stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />;
             })}
             {series.map(
@@ -159,9 +188,10 @@ export function TrendChart() {
             {hover !== null && (
               <g>
                 <line class="crosshair" x1={x(hover)} x2={x(hover)} y1={PAD.top} y2={PAD.top + plotH} />
-                {series.map((sr) => (
-                  <circle key={sr.group} class="marker" cx={x(hover)} cy={y(sr.values[hover])} r="4" fill={colors[sr.group]} />
-                ))}
+                {covered[hover] === 1 &&
+                  series.map((sr) => (
+                    <circle key={sr.group} class="marker" cx={x(hover)} cy={y(sr.values[hover])} r="4" fill={colors[sr.group]} />
+                  ))}
               </g>
             )}
           </svg>
@@ -172,14 +202,15 @@ export function TrendChart() {
             style={tipLeft ? { right: `${width - x(hover) + 10}px` } : { left: `${x(hover) + 10}px` }}
           >
             <div class="tooltip-title">{formatLong(cal.date(range.d0 + hover))}</div>
-            {series.map((sr) => (
+            {covered[hover] !== 1 && <div class="tooltip-note">No data for this date</div>}
+            {covered[hover] === 1 && series.map((sr) => (
               <div class="tooltip-row" key={sr.group}>
                 <span class="line-key" style={{ background: colors[sr.group] }} />
                 <strong>{radius > 0 ? fmt1(sr.values[hover]) : fmt(sr.raw[hover])}</strong>
                 <span>{GROUP_LABELS[sr.group]}</span>
               </div>
             ))}
-            {radius > 0 && <div class="tooltip-note">smoothed, per day</div>}
+            {radius > 0 && covered[hover] === 1 && <div class="tooltip-note">smoothed, per day</div>}
           </div>
         )}
       </div>
@@ -204,15 +235,32 @@ export function TrendChart() {
         ))}
       </ul>
       {body}
+      {holes.map((h) => (
+        <p class="fine" key={h.d0}>
+          No data exists for {formatRange(cal.date(h.d0), cal.date(h.d1))}.
+        </p>
+      ))}
       <p class="fine">The most recent days are usually incomplete: APD keeps adding reports for days afterwards.</p>
     </figure>
   );
 }
 
-function TrendTable({ series, d0, days, cal }: { series: Series[]; d0: number; days: number; cal: Calendar }) {
+function TrendTable({
+  series,
+  d0,
+  days,
+  cal,
+  covered,
+}: {
+  series: Series[];
+  d0: number;
+  days: number;
+  cal: Calendar;
+  covered: Uint8Array;
+}) {
   const rows = useMemo(() => {
     const unit = days <= 31 ? "day" : days <= 120 ? "week" : "month";
-    const out: { label: string; values: number[] }[] = [];
+    const out: { label: string; values: number[]; covered: boolean }[] = [];
     let key = "";
     for (let d = 0; d < days; d++) {
       const date = cal.date(d0 + d);
@@ -232,13 +280,16 @@ function TrendTable({ series, d0, days, cal }: { series: Series[]; d0: number; d
                 ? `Week of ${formatShort(date)}`
                 : `${formatMonth(date)} ${date.getUTCFullYear()}`,
           values: series.map(() => 0),
+          covered: false,
         });
       }
       const row = out[out.length - 1];
+      if (covered[d]) row.covered = true;
       series.forEach((sr, i) => (row.values[i] += sr.raw[d]));
     }
-    return out;
-  }, [series, d0, days, cal]);
+    // Periods entirely in a gap have no data, not zero incidents.
+    return out.filter((row) => row.covered);
+  }, [series, d0, days, cal, covered]);
   return (
     <div class="table-scroll">
       <table>

@@ -1,5 +1,6 @@
 import { useState } from "preact/hooks";
-import { applied, groupsOn, manifest, offenseSel, summary, theme } from "../state";
+import { coverageMask, overlaps } from "../data/coverage";
+import { applied, groupsOn, manifest, offenseSel, spans, summary, theme } from "../state";
 import { THEMES } from "../theme";
 import { fmt, fmt1 } from "./format";
 import { HourGrid } from "./HourGrid";
@@ -10,7 +11,10 @@ export function Overview() {
   const m = manifest.value;
   const [showAll, setShowAll] = useState(false);
   if (!s || !m) return null;
-  const days = applied.value.d1 - applied.value.d0 + 1;
+  const { d0, d1 } = applied.value;
+  // Per day of data: days in a gap between datasets are not days with no crime.
+  const days = Math.max(1, coverageMask(spans.value, d0, d1).reduce((n, c) => n + c, 0));
+  const historical = overlaps(spans.value, "historical", d0, d1);
   const colors = THEMES[theme.value].groups;
   const selected = new Set(offenseSel.value);
 
@@ -29,6 +33,13 @@ export function Overview() {
 
   return (
     <>
+      {historical && (
+        <p class="fine era-note">
+          Incidents before 2021 come from APD's older records system. They cover only the FBI's index crimes (Part
+          I), have a report date but no report time, and record no family violence. Compare them with later years
+          using the Part I filter.
+        </p>
+      )}
       <div class="tiles">
         <div class="tile">
           <div class="tile-label">Per day</div>

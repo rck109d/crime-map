@@ -147,10 +147,101 @@ The site at <https://rck109d.github.io/crime-map/> does not read these CSVs
 directly. On each deploy, `crimemap build-site` derives compact files from
 them (`manifest.json`, `points-YYYY.bin`, `detail/YYYY-MM.json`, and
 `search.json`, the street and address index behind the map's search); those are
-build output and are not committed. The map shows report dates from 2021
-onward and leaves out `unusual-dates.csv` and the change log. Of the columns above it uses the
-offense, class, dates, address, location type, coordinates, area fields,
-firearm and family-violence indicators, `Part` and `Vic_Count`.
+build output and are not committed. The map shows `historical/` (1997-2020)
+and `nibrs/` report dates from 2021 onward; it leaves out the stray pre-2021
+rows in `nibrs/`, the `unusual-dates.csv` files and the change log. Of the
+columns above it uses the offense, class, dates, address, location type,
+coordinates, area fields, firearm and family-violence indicators, `Part` and
+`Vic_Count`, plus `Source`, `SourceCategory` and `SourceOffense` for
+historical rows.
+
+## `historical/`: pre-NIBRS incidents, 1997-2020
+
+Source: APD's two historical ArcGIS layers on the same ArcGIS organisation as
+`nibrs/`, published once in January 2023 and not updated since:
+
+| `Source` | Layer | Report dates | Records |
+|---|---|---|---|
+| `1997-2008` | `Crime_Data_1997_2008` | 1997-01-01 to 2008-12-31 | 579,827 |
+| `2009-2020` | `2009_2020CrimeData` | 2009-01-01 to 2020-12-31 | 366,824 |
+
+(`https://services3.arcgis.com/Et5Qfajgiyosiw4d/arcgis/rest/services/<layer>/FeatureServer/0`.)
+`crimemap load-historical` fetches both and rewrites this directory; nothing
+refreshes it automatically.
+
+| Path | Contents |
+|---|---|
+| `historical/YYYY/YYYY-MM.csv` | Records whose report date falls in that month |
+| `historical/unusual-dates.csv` | Records with no report date (if any) |
+
+Rows are sorted by `ReportDate`, `IncidentNumber`, `NibrsUcrCode`. One record
+of the 1997-2008 layer has a 2014 report date, kept where it falls.
+
+**Coverage differs from `nibrs/`.** Both layers hold only the FBI's index
+(Part I) crimes: homicide, rape (1997-2008 only), robbery, aggravated
+assault, burglary, larceny and motor vehicle theft. There are no drug, fraud,
+vandalism, simple assault or other Part II offenses, so compare eras with
+Part I offenses, not totals. Report dates have no time of day. There is no
+location type, victim count or family-violence indicator.
+
+**Duplicates.** Records repeated with every field identical are kept once
+(1,081 in the 1997-2008 layer). Records sharing an incident number but
+differing in any field are kept.
+
+| Column | Meaning |
+|---|---|
+| `Source` | Which layer the row came from: `1997-2008` or `2009-2020` |
+| `IncidentNumber` | APD incident (report) number |
+| `ReportDate` | Report date, `YYYY-MM-DD` (no time recorded) |
+| `OccurredFromDate`, `OccurredToDate` | Window the offense occurred in, ISO 8601 Atlanta time; a bare date when only the date was recorded |
+| `SourceCategory` | The layer's UCR category, e.g. `ROBBERY-PEDESTRIAN`, `LARCENY-FROM VEHICLE` |
+| `SourceOffense` | 1997-2008: APD's crime type, e.g. `ROB-STREET-GUN`. 2009-2020: APD's offense code, e.g. `1204` (see below) |
+| `NibrsUcrCode`, `NIBRS_Offense`, `Crime_Against`, `Part`, `NIBRS_Bucket` | The nearest NIBRS offense, with the same names and classes as `nibrs/` |
+| `FireArmInvolved` | `yes` when the type or code names a gun, `no` when it names another weapon or none, empty when a homicide, rape, robbery or assault record says nothing about the weapon |
+| `StreetAddress` | Block-level address (2009-2020: the part of `Location` before any `@ place name`) |
+| `Longitude`, `Latitude` | WGS 84; empty where the layer has 0 |
+| `BEAT`, `Zone` | APD beat and zone (`Zone 1`-`Zone 6`) at the time |
+| `NPU`, `NhoodName` | As the layer records them; some old names no longer appear in `nibrs/` |
+| `src_*` | The source fields the columns above do not carry, as published (`NULL` text emptied). 1997-2008: `UCR__` (APD's 3-digit offense code), `Location` (location type code), `Shift`, `Apt`, `Intersection*`, `Weapon` and `Disp` (codes), `F__Vics` (victims), `Current_beat`, `Current_Zone`, `Councildist`. 2009-2020: `Location` (the address as entered, often with `@ place name`), `Apartment_Number` |
+
+**Dates.** The 1997-2008 layer stores report and occurrence dates as Atlanta
+midnight and times as Atlanta wall-clock times on a dummy date (2023-01-07);
+the 2009-2020 layer stores the report date at UTC midnight and occurrence
+dates and times as text (`9/3/2013`, `13:30`). Both are converted to the
+columns above.
+
+**NIBRS mapping.** The record's category decides the offense: homicide `09A`,
+manslaughter `09B`, rape `11A`, robbery `120`, aggravated assault `13A`,
+burglary `220`, auto theft `240`, larceny from vehicle `23F`, other larceny
+`23H`. The 1997-2008 crime type, or the 2009-2020 code, refines it:
+
+- 1997-2008 types: vehicle parts `23G`, shoplifting `23C`, pocket-picking
+  `23A`, sudden snatch (purse-snatching) `23B`, coin machine `23E`, theft from
+  building `23D`, plus a few dozen stray records (simple assault,
+  intimidation, forgery, disorderly conduct and others). 18
+  `NON-CRIMINAL REPORT` records have no offense.
+- 2009-2020 codes, which are NCIC-style offense codes; their meanings were
+  confirmed by joining 2009-2012 records to an APD export of the same years
+  that spells out each crime type:
+
+| Code | Meaning | Mapped to |
+|---|---|---|
+| `1201`-`1203` | Robbery, business: gun / other weapon / strongarm (`C` gas station, `D`/`L`/`Q`/`R`/`Y` convenience store, `K` knife, `X` gas station) | `120` |
+| `1204`-`1206` | Robbery, street: gun / other weapon / strongarm (`1205K` knife) | `120` |
+| `1207`-`1209` | Robbery, residence: gun / other weapon / strongarm (`1208K` knife) | `120` |
+| `1211`, `1299` + `G`/`K`/`O`/`S` | Robbery, bank / other: gun, knife, other weapon, strongarm | `120` |
+| `1212` | Forcible purse-snatching | `120` |
+| `1314`, `1315`, `1315K` | Aggravated assault: gun, other weapon, knife | `13A` |
+| `901`, `903`, `911` / `902`, `904`, `912` | Homicide: gun / other weapon | `09A` |
+| `2202`-`2205` | Burglary: forced residence, forced non-residence, unforced residence, unforced non-residence (`A`: attempt) | `220` |
+| `2301`, `2302`, `2303`, `2304`, `2305`, `2307`, `2308` | Pocket-picking, purse-snatching, shoplifting, vehicle parts, from vehicle, coin machine, from building | `23A`, `23B`, `23C`, `23G`, `23F`, `23E`, `23D` |
+| `2404`, `2424`, `2434` | Theft of auto, truck, other vehicle (`A`: attempt) | `240` |
+| NIBRS codes (`13A`, `23F`, ...) | Already NIBRS | as given |
+
+Other codes (`1313`, `1399`, `2399`, stray `2902`, `9999`, `NULL`...) keep the
+category's offense; they leave the firearm question open for homicide,
+robbery and assault. Attempts keep the offense they attempted, as in NIBRS.
+The rules are in `backend/src/crimemap/historical.py`.
 
 ## Querying
 

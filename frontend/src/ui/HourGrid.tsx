@@ -29,6 +29,7 @@ export function HourGrid() {
   if (max === 0) return null;
   const breaks = hexBreaks(max, ramp.length);
   const midnightShare = Math.round((midnight / known) * 100);
+  const untimed = s.total - known;
 
   return (
     <figure class="card">
@@ -120,6 +121,12 @@ export function HourGrid() {
             </div>
           </div>
         </>
+      )}
+      {untimed > 0 && (
+        <p class="fine">
+          {fmt(untimed)} {untimed === 1 ? "incident has" : "incidents have"} no recorded start time and{" "}
+          {untimed === 1 ? "is" : "are"} left out.
+        </p>
       )}
       {midnightShare >= 8 && (
         <p class="fine">

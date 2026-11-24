@@ -1,6 +1,6 @@
 # crime-map
 
-A map of Atlanta Police Department incident reports since 2021, and the
+A map of Atlanta Police Department incident reports since 1997, and the
 long-term archive behind it.
 
 **Site: <https://rck109d.github.io/crime-map/>**
@@ -49,6 +49,7 @@ addresses is fetched a month at a time, only when an incident is opened.
 | Path | What |
 |---|---|
 | `data/nibrs/` | The archive: APD's data as it currently stands (committed) |
+| `data/historical/` | APD's pre-NIBRS records, 1997-2020, loaded once from its historical layers by `crimemap load-historical` (committed) |
 | `data/nibrs-changes/` | Change log: rows APD removed, and earlier versions of rows it edited |
 | `backend/` | Python: `crimemap load` (archive) and `crimemap build-site` (site data) |
 | `frontend/` | The web app |

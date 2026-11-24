@@ -5,7 +5,7 @@ import { locate } from "../data/format";
 import { groupByIncident } from "../data/incidents";
 import { loadDetail, loadSearchIndex } from "../data/load";
 import { displayName, streetFilter } from "../data/search";
-import { FLAG_FAMILY, FLAG_FIREARM, NO_COORD, type MonthDetail } from "../data/types";
+import { FLAG_FAMILY, FLAG_FIREARM, NO_COORD, UNKNOWN_MINUTE, type MonthDetail } from "../data/types";
 import { mapApi, PLACE_METERS } from "../map/MapView";
 import {
   addressCounts,
@@ -165,7 +165,7 @@ export function SelectionList() {
               ? `No incidents within ${PLACE_METERS} m of this place match your date range and filters.`
               : "No incidents at this address match your date range and filters."}
           </p>
-          {sel.known ? <p class="fine">{plural(sel.known, "incident")} reported here since 2021.</p> : null}
+          {sel.known ? <p class="fine">{plural(sel.known, "incident")} reported here in all the data.</p> : null}
           <button
             class="button"
             onClick={async () => {
@@ -236,15 +236,28 @@ export function SelectionList() {
               <dl>
                 <dt>Reported</dt>
                 <dd>
-                  {formatWeekday(reported)}, {formatLong(reported)} · {formatMinute(p.minute[first])}
+                  {formatWeekday(reported)}, {formatLong(reported)}
+                  {p.minute[first] !== UNKNOWN_MINUTE && ` · ${formatMinute(p.minute[first])}`}
                 </dd>
                 {d && w ? (
                   <>
-                    <dt>Occurred</dt>
-                    <dd>
-                      {formatStamp(d.from[at])}
-                      {d.to[at] && d.to[at] !== d.from[at] ? ` – ${formatStamp(d.to[at])}` : ""}
-                    </dd>
+                    {d.from[at] && (
+                      <>
+                        <dt>Occurred</dt>
+                        <dd>
+                          {formatStamp(d.from[at])}
+                          {d.to[at] && d.to[at] !== d.from[at] ? ` – ${formatStamp(d.to[at])}` : ""}
+                        </dd>
+                      </>
+                    )}
+                    {d.type && (
+                      <>
+                        <dt>APD type</dt>
+                        <dd>
+                          {rows.map((row) => d.type![detailRow(row)]).filter(Boolean).join(", ") || "Not recorded"}
+                        </dd>
+                      </>
+                    )}
                     <dt>Location</dt>
                     <dd>{d.addr[at] || "Not recorded"}</dd>
                     {m.locationTypes[d.loc[at]] && (

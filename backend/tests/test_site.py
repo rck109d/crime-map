@@ -34,7 +34,7 @@ def read_points(path):
     assert raw[:2] == b"\x1f\x8b"  # stored gzip-compressed
     body = gzip.decompress(raw)
     magic, version, _, count = struct.unpack_from("<4sHHI", body)
-    assert (magic, version) == (b"CMAP", 2)
+    assert (magic, version) == (b"CMAP", 3)
     assert len(body) == 12 + count * 19
     cols, offset = {}, 12
     for name in ("day", "minute", "x", "y", "nhood", "addr_lo"):
@@ -65,7 +65,7 @@ def test_site_files_match_the_archive(tmp_path, layer, server, records):
     count, cols = read_points(out / "points-2026.bin")
     assert count == manifest["count"] == sum(m["count"] for m in months)
     assert cols["day"] == sorted(cols["day"])
-    assert cols["day"][0] == (datetime(2026, 9, 30) - datetime(2021, 1, 1)).days
+    assert cols["day"][0] == (datetime(2026, 9, 30) - datetime(1997, 1, 1)).days
     assert cols["minute"][0] == 20 * 60 + 9  # 8:09 PM Atlanta time, not UTC
     assert cols["x"].count(NO_COORD) == 1
 

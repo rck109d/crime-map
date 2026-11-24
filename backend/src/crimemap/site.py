@@ -9,6 +9,11 @@ here from the CSV archive:
     search.json          streets, addresses and intersections, for the map's search
 
 Row N of a month is the same incident in the points table and the detail file.
+
+Two datasets feed it: `nibrs/` (APD's live layer, 2021 on) and `historical/`
+(APD's pre-NIBRS layers, 1997-2020). Historical records carry a report date
+but no report time, so their report minute is "unknown"; their occurrence
+times are known.
 Nothing written here is committed; it is rebuilt from data/ on every deploy.
 """
 
@@ -28,13 +33,15 @@ from .hull import outlines
 from .search_index import build_search_index, clean_address, number_addresses
 from .store import read_csv
 
-FORMAT_VERSION = 2
+# 3: the report minute can be UNKNOWN_MINUTE (historical rows have no time).
+FORMAT_VERSION = 3
 MAGIC = b"CMAP"
 
-# The source's coverage starts in 2021; the few earlier report dates in the
-# archive are stray records, not history, and would only stretch the timeline.
-SITE_FIRST_YEAR = 2021
-EPOCH = date(SITE_FIRST_YEAR, 1, 1)
+# The live source's coverage starts in 2021; the few earlier report dates in
+# `nibrs/` are stray records, not history, and would only blur the gap before
+# it. Everything earlier on the map comes from `historical/`.
+NIBRS_FIRST_YEAR = 2021
+EPOCH = date(1997, 1, 1)
 
 # Coordinates are stored as 16-bit steps across this box (about 0.85 m each).
 # It comfortably contains the city and the airport; anything outside it is a
@@ -59,6 +66,9 @@ FLAG_PART_ONE = 4
 # joined by this flag is one incident with all its offenses.
 FLAG_SAME_INCIDENT = 8
 UNKNOWN_U8 = 255
+UNKNOWN_MINUTE = 0xFFFF
+
+DATASETS = ("historical", "nibrs")
 
 
 class Dictionary:
@@ -106,6 +116,16 @@ def title_case_code(value: str) -> str:
     return value.replace("_", " ").strip().capitalize()
 
 
+def source_label(row: dict[str, str]) -> str:
+    """How APD recorded a historical offense: its crime type, or category and code."""
+    if row.get("Source") == "2009-2020":
+        code = row.get("SourceOffense", "")
+        return (
+            f"{row.get('SourceCategory', '')} ({code})" if code else row.get("SourceCategory", "")
+        )
+    return row.get("SourceOffense", "") or row.get("SourceCategory", "")
+
+
 def encode_points(columns16: list[array], columns8: list[array], count: int) -> bytes:
     body = bytearray(MAGIC + struct.pack("<HHI", FORMAT_VERSION, 0, count))
     for col in columns16:
@@ -119,14 +139,22 @@ def encode_points(columns16: list[array], columns8: list[array], count: int) -> 
 
 
 def build_site(data_dir: Path, out_dir: Path) -> dict:
-    dataset = data_dir / "nibrs"
-    month_files = sorted(
-        p
-        for p in dataset.glob("[0-9][0-9][0-9][0-9]/*.csv")
-        if int(p.parent.name) >= SITE_FIRST_YEAR
-    )
+    # (path, dataset) in month order. The datasets cover different years, so
+    # sorting by file name interleaves nothing.
+    sources: dict[Path, str] = {}
+    for name in DATASETS:
+        for p in (data_dir / name).glob("[0-9][0-9][0-9][0-9]/*.csv"):
+            year = int(p.parent.name)
+            if name == "nibrs" and year < NIBRS_FIRST_YEAR:
+                continue
+            if year < EPOCH.year:
+                continue
+            sources[p] = name
+    month_files = sorted(sources, key=lambda p: p.stem)
     if not month_files:
-        raise SystemExit(f"no archived months found under {dataset}")
+        raise SystemExit(f"no archived months found under {data_dir}")
+    if len({p.stem for p in month_files}) != len(month_files):
+        raise SystemExit("historical/ and nibrs/ both have a file for the same month")
 
     offenses = Dictionary()
     offense_info: list[dict] = []
@@ -156,11 +184,13 @@ def build_site(data_dir: Path, out_dir: Path) -> dict:
     years: dict[int, dict] = {}
     # address -> (id, x, y) at its most recently reported position (for search)
     places: dict[str, tuple[int, int, int]] = {}
-    area_positions: dict[str, dict[int, set[tuple[int, int]]]] = {
-        "nhood": {},
-        "npu": {},
-        "zone": {},
+    # Per dataset, so that an area's outline follows its current incidents:
+    # boundaries have moved since 1997, and historical positions only outline
+    # areas (old neighborhood names, mostly) that nothing later uses.
+    area_positions: dict[str, dict[str, dict[int, set[tuple[int, int]]]]] = {
+        name: {"nhood": {}, "npu": {}, "zone": {}} for name in DATASETS
     }
+    coverage: dict[str, list[str]] = {}
     total = unmapped = 0
     last_report: datetime | None = None
     digest = hashlib.sha256()
@@ -174,8 +204,12 @@ def build_site(data_dir: Path, out_dir: Path) -> dict:
         offense, npu, zone, flags, occ_hour, occ_dow, addr_hi = (array("B") for _ in range(7))
         months = []
         for path in paths:
+            dataset = sources[path]
+            historical = dataset == "historical"
             _, rows = read_csv(path)
             detail = {k: [] for k in ("inc", "rep", "addr", "from", "to", "loc", "beat", "vic")}
+            if historical:
+                detail["type"] = []  # APD's original crime type or code
             kept = 0
             previous_report = None
             for row in rows:
@@ -185,8 +219,13 @@ def build_site(data_dir: Path, out_dir: Path) -> dict:
                 kept += 1
                 if last_report is None or reported > last_report:
                     last_report = reported
+                span = coverage.setdefault(dataset, [reported.date().isoformat()] * 2)
+                span[0] = min(span[0], reported.date().isoformat())
+                span[1] = max(span[1], reported.date().isoformat())
                 day.append((reported.date() - EPOCH).days)
-                minute.append(reported.hour * 60 + reported.minute)
+                minute.append(
+                    UNKNOWN_MINUTE if historical else reported.hour * 60 + reported.minute
+                )
 
                 x = quantize(row.get("Longitude", ""), BBOX["west"], BBOX["east"])
                 y = quantize(row.get("Latitude", ""), BBOX["south"], BBOX["north"])
@@ -231,7 +270,8 @@ def build_site(data_dir: Path, out_dir: Path) -> dict:
                     # Every position ever recorded in an area, to outline it (id 0 is "none").
                     for kind, area_id in area_ids.items():
                         if area_id:
-                            area_positions[kind].setdefault(area_id, set()).add((x, y))
+                            positions = area_positions[dataset][kind]
+                            positions.setdefault(area_id, set()).add((x, y))
                 incident = row.get("IncidentNumber", "")
                 this_report = (row.get("ReportDate", ""), incident)
                 flags.append(
@@ -242,7 +282,10 @@ def build_site(data_dir: Path, out_dir: Path) -> dict:
                 )
                 previous_report = this_report
 
-                occurred = local_parts(row.get("OccurredFromDate", ""))
+                # A bare date (historical rows whose time was not recorded) is
+                # not midnight: leave it out of the time-of-week counts.
+                occurred_text = row.get("OccurredFromDate", "")
+                occurred = local_parts(occurred_text) if "T" in occurred_text else None
                 if occurred is None:
                     occ_hour.append(UNKNOWN_U8)
                     occ_dow.append(UNKNOWN_U8)
@@ -264,6 +307,8 @@ def build_site(data_dir: Path, out_dir: Path) -> dict:
                 detail["loc"].append(location_types.id(row.get("LocationType", "")))
                 detail["beat"].append(row.get("BEAT", ""))
                 detail["vic"].append(row.get("Vic_Count", ""))
+                if historical:
+                    detail["type"].append(source_label(row))
 
             if kept == 0:
                 continue
@@ -290,6 +335,15 @@ def build_site(data_dir: Path, out_dir: Path) -> dict:
         total += count
 
     assert last_report is not None
+    # Later datasets win: an area seen in nibrs/ is outlined from nibrs/ alone.
+    outline_positions: dict[str, dict[int, set[tuple[int, int]]]] = {
+        "nhood": {},
+        "npu": {},
+        "zone": {},
+    }
+    for name in DATASETS:
+        for kind, positions in area_positions[name].items():
+            outline_positions[kind].update(positions)
     search_text = json.dumps(
         build_search_index(places, address_counts), separators=(",", ":"), ensure_ascii=False
     )
@@ -313,10 +367,17 @@ def build_site(data_dir: Path, out_dir: Path) -> dict:
         "zones": zones.values,
         # Per area, an outline around every incident position recorded in it.
         "outlines": {
-            "nhood": outlines(area_positions["nhood"], len(nhoods.values)),
-            "npu": outlines(area_positions["npu"], len(npus.values)),
-            "zone": outlines(area_positions["zone"], len(zones.values)),
+            "nhood": outlines(outline_positions["nhood"], len(nhoods.values)),
+            "npu": outlines(outline_positions["npu"], len(npus.values)),
+            "zone": outlines(outline_positions["zone"], len(zones.values)),
         },
+        # Report-date spans each dataset covers; the days between them have no
+        # data at all (not zero incidents).
+        "coverage": [
+            {"source": name, "from": coverage[name][0], "to": coverage[name][1]}
+            for name in DATASETS
+            if name in coverage
+        ],
         "locationTypes": [title_case_code(v) for v in location_types.values],
         "years": [years[y] for y in sorted(years)],
     }
